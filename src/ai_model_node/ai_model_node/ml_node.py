@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from ai_model_node.model import PytorchModel, test_read
-from std_msgs.msg import Int64MultiArray
+from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -54,15 +54,28 @@ class MachineLearningNode(Node):
         super().__init__(node_name)
 
         self.output_publisher = self.create_publisher(msg_type=pub_datatype, topic="/model/output", qos_profile=QoS)
-        self.input_subscriber = self.create_subscription(msg_type=sub_datatype, topic="/model/input", qos_profile=QoS, callback=self._callback)
+        self.input_subscriber = self.create_subscription(msg_type=sub_datatype, topic="/model/input", qos_profile=QoS, callback=self.subscriber_callback)
 
-        # self.model = PytorchModel()  # need to insert your model class with all the layers and convs, as well as the path to the weights. 
+        # need to insert your model class with all the layers and convs, as well as the relative path to the weights. 
+        # the relative path function can recognise './' as the same directory. Not too sure if ../ works but you can try! (it's Path from pathlib)
+
+        # self.model = PytorchModel(model_class, weights_path)  
         # self.model.load_model()
 
+        # =\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\= 
+        # Example timer code with frequency setting baked in # 
+
+        # frequency = 1
+        # period = 1 / frequency
+        # self.timer = self.create_timer(period, self.timer_callback)
+        # =\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=\=
 
         # self.get_logger().info(f"Can import! {type(PytorchModel), PytorchModel.__dict__}")
 
-    def _callback(self, msg):
+    def timer_callback(self, msg):
+        pass
+
+    def subscriber_callback(self, msg):
         pass
 
 

@@ -12,6 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
     ],
     install_requires=['setuptools'],
+    include_package_data=True,
     zip_safe=True,
     maintainer='Youma Leng-Nijo',
     maintainer_email='yln28@bath.ac.uk',

@@ -3,8 +3,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from std_msgs.msg import Int16MultiArray
-from sensor_msgs.msg import Image
-from cv_bridge import CvBridge
 
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
@@ -23,9 +21,6 @@ QoS = QoSProfile(
 
 
 class MotorDriverNode(Node):
-
-    bridge = CvBridge()
-
     def __init__(self):
         super().__init__("motor_driver_node")
 
@@ -35,14 +30,6 @@ class MotorDriverNode(Node):
 
     def _control_callback(self, msg):
         pass
-
-
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
-    
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
-    
 
 
 def main(args=None):

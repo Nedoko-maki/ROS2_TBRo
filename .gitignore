@@ -3,3 +3,4 @@ install/
 build/
 src/ai_model_node/ai_model_node/model_data/
 launch/__pycache__/
+venv/

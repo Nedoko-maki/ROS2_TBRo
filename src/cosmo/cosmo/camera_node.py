@@ -7,6 +7,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 from picamera2 import Picamera2, Preview
+
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
     depth=10,  # Queue size of 10

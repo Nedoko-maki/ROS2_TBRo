@@ -27,7 +27,9 @@ if [ ! -d ./src ]; then
 	exit 2
 fi
 
+. ./venv/bin/activate
 colcon build --packages-select cosmo 	
+deactivate
 
 elif [ $option = "exit" ]; then
 	exit 1

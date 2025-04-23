@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from std_msgs.msg import Int16MultiArray
-import RPi.GPIO as GPIO
+import gpiozero as gpio
 
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
@@ -23,18 +23,33 @@ QoS = QoSProfile(
 # Not bad starting point to look at: https://wiki.ros.org/dynamixel_controllers/Tutorials/ConnectingToDynamixelBus
 # GPIO documentation: https://sourceforge.net/p/raspberry-gpio-python/wiki/Examples/ 
 
-GPIO.setmode(GPIO.BOARD)
+
+# RPi.GPIO is not available for RPi5 since the new Pi uses a custom RP1 chip instead of the previous interfacing chip.
+# The two new contenders are gpiozero and gpiod. After some research there is evidence to show that gpiod is nearly 3x
+# the polling rate, however for our purposes that may be excessive so we are 
+# using the officially recommended library gpiozero instead. 
+
+# https://gpiozero.readthedocs.io/en/latest/ 
+
+InputPin = gpio.DigitalInputDevice
+OutputPin = gpio.DigitalOutputDevice 
+
+
+class MotorPinout:
+    def __init__(self):
+        pass
+
 
 
 class MotorDriverNode(Node):
 
     pins = {
-        "MOTOR_A": {"IN1": 32, "IN2": 12, "NFAULT": 37, "SNSOUT": 10},
-        "MOTOR_B": {"IN1": 32, "IN2": 12, "NFAULT": 16, "SNSOUT": 18},
-        "MOTOR_C": {"IN1": 35, "IN2": 33, "NFAULT": 13, "SNSOUT": 15},
-        "MOTOR_D": {"IN1": 35, "IN2": 33, "NFAULT": 29, "SNSOUT": 31},
-        "NSLEEP": 40
-                        }
+        "MOTOR_A": {"IN1": 12, "IN2": 18, "NFAULT": 26, "SNSOUT": 15},
+        "MOTOR_B": {"IN1": 12, "IN2": 18, "NFAULT": 23, "SNSOUT": 24},
+        "MOTOR_C": {"IN1": 19, "IN2": 13, "NFAULT": 27, "SNSOUT": 22},
+        "MOTOR_D": {"IN1": 19, "IN2": 13, "NFAULT": 5, "SNSOUT": 6},
+        "NSLEEP": 21
+                        }  # As per spec, this is the GPIO pin IDs rather than the physical pin numbers. 
 
     def __init__(self):
         super().__init__("motor_driver_node")

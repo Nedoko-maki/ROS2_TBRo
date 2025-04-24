@@ -4,6 +4,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 
 from std_msgs.msg import Int16MultiArray
 import gpiozero as gpio
+import cosmo.rpio as rpio
 
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
@@ -27,18 +28,13 @@ QoS = QoSProfile(
 # RPi.GPIO is not available for RPi5 since the new Pi uses a custom RP1 chip instead of the previous interfacing chip.
 # The two new contenders are gpiozero and gpiod. After some research there is evidence to show that gpiod is nearly 3x
 # the polling rate, however for our purposes that may be excessive so we are 
-# using the officially recommended library gpiozero instead. 
+# using the officially recommended library gpiozero instead.
 
 # https://gpiozero.readthedocs.io/en/latest/ 
 
 InputPin = gpio.DigitalInputDevice
 OutputPin = gpio.DigitalOutputDevice 
-
-
-class MotorPinout:
-    def __init__(self):
-        pass
-
+OutputPWMPin = gpio.PWMOutputDevice
 
 
 class MotorDriverNode(Node):
@@ -51,23 +47,25 @@ class MotorDriverNode(Node):
         "NSLEEP": 21
                         }  # As per spec, this is the GPIO pin IDs rather than the physical pin numbers. 
 
+    pwm_freq = 100 # Not defined properly yet with calculations for the Motor Bridge IC. 
+
     def __init__(self):
         super().__init__("motor_driver_node")
 
         self.control_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
 
-        for motor_controller in self.pins:
-            if motor_controller != "NSLEEP":
-                for pin_name, pin in motor_controller.items():
+        for motor in self.pins:
+            if motor != "NSLEEP":
+                for pin_name, pin in self.pins[motor].items():
                     match pin_name:
-                        case "IN1": GPIO.setup(pin, GPIO.OUT)
-                        case "IN2": GPIO.setup(pin, GPIO.OUT)
-                        case "NFAULT": GPIO.setup(pin, GPIO.IN)
-                        case "SNSOUT": GPIO.setup(pin, GPIO.IN)
+                        case "IN1": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
+                        case "IN2": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
+                        case "NFAULT": self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
+                        case "SNSOUT": self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
 
-        GPIO.setup(self.pins["NSLEEP"], GPIO.OUT)
-        GPIO.output(self.pins["NSLEEP"], GPIO.HIGH)  # Device sleep mode: pull logic low. Otherwise set logic high. 
+        # Device sleep mode: pull logic low for sleep mode. Otherwise set logic high. 
+        self.pins["NSLEEP"] = rpio.set_pin(self.pins["NSLEEP"], OutputPin, active_high=True, initial_value=True) 
 
         # TI documentation on the motor drivers: https://www.ti.com/lit/ds/symlink/drv8701.pdf
 

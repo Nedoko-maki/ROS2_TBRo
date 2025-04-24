@@ -11,6 +11,10 @@ import gpiozero as gpio
 
 pins = {x: None for x in range(30)}
 
+InputPin = gpio.DigitalInputDevice  # shorter aliases for convenience
+OutputPin = gpio.DigitalOutputDevice 
+OutputPWMPin = gpio.PWMOutputDevice
+
 
 def set_pin(pin_number, pin_type, **kwargs):
     if pins[pin_number] is not None:

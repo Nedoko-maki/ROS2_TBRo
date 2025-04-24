@@ -18,6 +18,7 @@ fi
 
 echo "Located /install and /launch."
 source ./install/local_setup.bash
+. ./venv/bin/activate
 ros2 launch ./launch/cosmo_launch.py
 
 elif [ $option = 2 ]; then

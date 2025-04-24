@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
-from std_msgs.msg import Int16MultiArray
+from std_msgs.msg import Int16MultiArray, String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
@@ -29,22 +29,23 @@ class ControlNode(Node):
     def __init__(self):
         super().__init__("control_node")
 
-        self.motor_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/motor_driver/input", qos_profile=QoS)
+        self.motor_pub = self.create_publisher(msg_type=String, topic="/motor_driver/input", qos_profile=QoS)
         self.motor_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS, callback=self._motor_callback)
 
         self.model_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/model/output", qos_profile=QoS, callback=self._model_callback)
         
         self.flask_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/flask/input", qos_profile=QoS)
-        self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._control_callback)
+        self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 
         self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
+        self.test_motors()
 
     def _motor_callback(self, msg):
         pass
 
-    def _control_callback(self, msg):
+    def _flask_callback(self, msg):
         pass
 
     def _battery_callback(self, msg):
@@ -59,6 +60,11 @@ class ControlNode(Node):
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")
     
+    def test_motors(self):
+        msg = String()
+        msg.data = "forward"
+        self.motor_pub.publish(msg)
+
 
 
 def main(args=None):

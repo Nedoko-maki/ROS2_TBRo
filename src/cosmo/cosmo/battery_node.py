@@ -5,8 +5,10 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import BatteryState
 
-import RPi.GPIO as GPIO 
+import gpiozero as gpio
 import smbus3 as smbus
+import cosmo.rpio as rpio
+from cosmo.rpio import InputPin, OutputPin, OutputPWMPin
 
 # EXTREMELY IMPORTANT LINKS FOR LOW LEVEL INTERACTIONS
 
@@ -40,14 +42,13 @@ class BatteryNode(Node):
     def __init__(self):
         super().__init__("battery_node")
 
-        self.bus = smbus.SMBus(0)  # guessing the i2c interface path, will check once enabled and put here
+        self.bus = smbus.SMBus("/dev/i2c-1")  # guessing the i2c interface path, will check once enabled and put here
 
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self.timer = self.create_timer(1/timer_frequency, self.get_battery_state)    
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
-
 
 
     def _battery_callback(self, msg):

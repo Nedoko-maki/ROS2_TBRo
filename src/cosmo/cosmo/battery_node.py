@@ -42,13 +42,15 @@ QoS = QoSProfile(
 class BatteryNode(Node):
 
     battery_params = {  # Read here and find the registers to find more detailed information: https://www.analog.com/media/en/technical-documentation/user-guides/max1726x-modelgauge-m5-ez-user-guide.pdf
-        "DesignCap": 0,  # The expected design capacity of the cell.
+        "DesignCap": 0x1388,  # The expected design capacity of the cell. (5000mAh)
         "IchgTerm": 0,  # Termination current, when charging current is between 0.125 * Ichgterm and 1.25 * Ichgterm it will terminate.
-        "VEmpty": 0xA5, # VEmpty is considered 0%, the empty voltage target. Default is 3.3V 
+        "VEmpty": 0xA561, # VEmpty is considered 0%, the empty voltage target. Default is 3.3V, and a recovery voltage of 3.88V. 
         #For VEmpty, the docs are odd. It says a 10mV resolution with 8 bits, which is 256 levels(??), it probably is wrong at it is actually 20mV per level. 0-5.11V 
-        "FullSOCThr": 0
-        }
+        "FullSOCThr": 0x5005 # when VFSOC > FullSOCThr, it will stop charging. Default is 95% (0x5F05), 80% is 0x5005.
+        } 
     
+    # Apparently 20%-80% is good for longetivity, research needs to be done on that though. 
+
     model_cfg = 0b1000010000000000  # refer to the ModelCFG page. Bit 10 and 15 are set (hopefully the correct endian)
 
     def __init__(self):  # initialising the ROS2 node
@@ -83,6 +85,11 @@ class BatteryNode(Node):
         msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 10 seconds."
         self._wait(0x3D, 0x01, msg)
         
+        self._write_register(0x18, self.battery_params["DesignCap"])
+        self._write_register(0x1E, self.battery_params["IchgTerm"])
+        self._write_register(0x3A, self.battery_params["VEmpty"])
+        self._write_and_verify_register(0x13, self.battery_params["FullSOCThr"])
+
         self._write_register(0xDB, self.model_cfg)  # Set the modelcfg register
 
         # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading        
@@ -98,6 +105,10 @@ class BatteryNode(Node):
          # THE DOCUMENTATION IS SHITE, WHAT THE FUCK IS A QRTABLE RAHHHHHH
         # Basically it doesn't explain at all what is a QRTable and which characterisation params to write
         # so I'll just ignore it for now. We need to figure out tf it means though. 
+
+        # We aren't supposed to touch this??? Or something?? After looking up other ModelGauge chips
+        # with this parameter apparently we're not supposed to use this but it asks to write it in the
+        # documentation?
 
         self._write_register(0xBA, HibCFG) # restore original HibCFG values. 
 
@@ -150,11 +161,11 @@ class BatteryNode(Node):
             SAVED_FullCapNom = self._read_register(0x23)  # The full discharge capacity compensated according to present conditions. 
 
         json_data = {
-            "RComp0": SAVED_RCOMP0,
-            "TempCo": SAVED_TempCo,
-            "FullCapRep": SAVED_FullCapRep,
-            "Cycles": SAVED_Cycles,
-            "FullCapNom": SAVED_FullCapNom
+            "RComp0": hex(SAVED_RCOMP0),
+            "TempCo": hex(SAVED_TempCo),
+            "FullCapRep": hex(SAVED_FullCapRep),
+            "Cycles": hex(SAVED_Cycles),
+            "FullCapNom": hex(SAVED_FullCapNom)
                      }
 
         with open("battery_parameters.json", "w") as fs:

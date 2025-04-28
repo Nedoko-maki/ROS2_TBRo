@@ -29,7 +29,7 @@ class FlaskNode(Node):
     bridge = CvBridge()
 
     def __init__(self):
-        super().__init__("model_node")
+        super().__init__("flask_node")
 
         self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
         self.control_pub = self.create_publisher(msg_type=Image, topic="/flask/output/commands", qos_profile=QoS)

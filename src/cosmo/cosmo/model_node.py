@@ -30,10 +30,10 @@ class ModelNode(Node):
         super().__init__("model_node")
 
         self.model_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/model/output", qos_profile=QoS)
-        self.flask_sub = self.create_subscription(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS, callback=self._flask_callback)
+        self.flask_sub = self.create_subscription(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS, callback=self._model_callback)
 
 
-    def _flask_callback(self, msg):
+    def _model_callback(self, msg):
         pass
 
 

@@ -28,7 +28,7 @@ QoS = QoSProfile(
 
 # RPi.GPIO is not available for RPi5 since the new Pi uses a custom RP1 chip instead of the previous interfacing chip.
 # The two new contenders are gpiozero and gpiod. After some research there is evidence to show that gpiod is nearly 3x
-# the polling rate, however for our purposes that may be excessive so we are 
+# the polling rate (~160kHz vs ~480kHz), however for our purposes that may be excessive so we are 
 # using the officially recommended library gpiozero instead.
 
 # https://gpiozero.readthedocs.io/en/latest/ 
@@ -57,14 +57,27 @@ class MotorDriverNode(Node):
                 match pin_name:
                     case "IN1": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
                     case "IN2": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
-                    case "NFAULT": self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
-                    case "SNSOUT": self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
+                    case "NFAULT": 
+                        self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
+                        self.pins[motor][pin_name].motor_name = motor
+                        self.pins[motor][pin_name].when_deactivated = self._fault_detected  
+                    case "SNSOUT": 
+                        self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
+                        self.pins[motor][pin_name].motor_name = motor
+                        self.pins[motor][pin_name].when_deactivated = self._chopping_detected  
 
         # Device sleep mode: pull logic low for sleep mode. Otherwise set logic high. 
         self.pins["NSLEEP"] = rpio.set_pin(self.pins["NSLEEP"], OutputPin, active_high=True, initial_value=True) 
 
         # TI documentation on the motor drivers: https://www.ti.com/lit/ds/symlink/drv8701.pdf
 
+
+    def _fault_detected(self, device):
+        self.get_logger().warn(f"Motor Fault: {device.motor_name} has pulled nFAULT low.")
+
+
+    def _chopping_detected(self, device):
+        self.get_logger().warn(f"Motor Fault: {device.motor_name} has pulled SNSOUT low. The drive current has hit the current chopping threshold")
 
 
     def _control_callback(self, msg):
@@ -78,25 +91,27 @@ class MotorDriverNode(Node):
         # the data across topics and nodes. 
 
         # First instantiate the message type, e.g. msg = String(), and then access the member data, msg.data = "whatever". Bingo!
-
-        match msg.data:
+        
+        motors = [x for x in self.pins if x != "NSLEEP"]
+        
+        match msg.data:    
             case "forward":
-                for motor in [x for x in self.pins if x != "NSLEEP"]:
+                for motor in motors:
                     self.pins[motor]["IN1"].on()
                     self.pins[motor]["IN2"].off()
 
             case "reverse":
-                for motor in [x for x in self.pins if x != "NSLEEP"]:
+                for motor in motors:
                     self.pins[motor]["IN1"].off()
                     self.pins[motor]["IN2"].on()
 
             case "coast":
-                for motor in [x for x in self.pins if x != "NSLEEP"]:
+                for motor in motors:
                     self.pins[motor]["IN1"].off()
                     self.pins[motor]["IN2"].off()
 
             case "brake":
-                for motor in [x for x in self.pins if x != "NSLEEP"]:
+                for motor in motors:
                     self.pins[motor]["IN1"].on()
                     self.pins[motor]["IN2"].on()
 
@@ -114,3 +129,10 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+
+
+# TODO: 
+#
+# - add code to deal with individual motors being disabled and the rest of the motors still running. 
+#
+#

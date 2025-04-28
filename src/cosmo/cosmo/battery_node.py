@@ -125,7 +125,7 @@ CustLED_Reg = 0x64
 class BatteryNode(Node):
     
     """
-    Initialises the BatteryNode. 
+    Initialises the BatteryNode, default battery characteristic values stored in the battery_params dict in the class. 
 
 
     :return: BatteryNode object
@@ -147,6 +147,10 @@ class BatteryNode(Node):
     def __init__(self):  # initialising the ROS2 node
         super().__init__("battery_node")
 
+        """
+        Initialises timers, the subscriber and publisher for communication with the control node. Calls the _init_chip method to start the MAX17263. 
+        """
+
         self.i2c_address = 0x02 # placeholder address 
         self.bus = smbus.SMBus("/dev/i2c-1")  # I believe that this is the /dev/ bus number. This is different
         # from the I2C address, which will be found once I hook the MAX17263 chip up with the Pi.
@@ -162,8 +166,15 @@ class BatteryNode(Node):
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
         self.state = {}
+        self._init_chip()
 
     def _init_chip(self):  # initialising the IC chip on powerup.
+
+        """Goes through the given startup commands to wake up the MAX17263 chip as described here:
+
+        https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
+        """
+
         STATUS_POR_BIT = self._read_register(Status_Reg) & 0x0002
 
         if STATUS_POR_BIT == 0: # check if the IC has been reset.
@@ -201,19 +212,39 @@ class BatteryNode(Node):
 
         # We aren't supposed to touch this??? Or something?? After looking up other ModelGauge chips
         # with this parameter apparently we're not supposed to use this but it asks to write it in the
-        # documentation?
+        # guidance documentation? Help I'm losing it
 
         self._write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
 
     @staticmethod
     def _hex_to_dec(hex):
+        """Converts hexidecimal strings into actual base-16 numerical values.
+
+        :return: hexidecimal value
+        :rtype: int
+        """
         return int(hex, 16)
 
     def _write_json(self, json_data, file="battery_parameters.json"):
-         with open(file, "w") as fs:
+        """Write to the settings json file in the case there is an unexpected power outage.
+
+        :param json_data: dictionary of setting values.
+        :type json_data: dict
+        :param file: file path, defaults to local directory "battery_parameters.json".
+        :type file: str, Pathlike object
+        """
+
+        with open(file, "w") as fs:
             json.dump(json_data, fs)
 
     def _read_json(self, file="battery_parameters.json"):
+
+        """Read the settings json file.
+
+        :return: dictionary of setting values
+        :rtype: dict
+        """
+
         try:
             with open(file, "r") as fs:
                 json_data = json.load(fs)
@@ -224,6 +255,19 @@ class BatteryNode(Node):
             return None
         
     def _wait(self, register, bit_mask, error_msg, timeout_seconds=10):
+
+        """ Waits for a bit or a set of bits to be toggled.
+
+        :param register: register to wait on.
+        :type register: int
+        :param bit_mask: bit mask to filter for the concerned bits.
+        :type bit_mask: int
+        :param error_msg: error message if the timeout is exceeded.
+        :type error_msg: str
+        :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
+        :type timeout_seconds: int
+        """
+
         _timeout_count = 0  # 1000 * 1e-2 = 10 seconds
         while self._read_register(register) & bit_mask != 0:
             self._timeout.sleep()
@@ -232,25 +276,52 @@ class BatteryNode(Node):
                 self.get_logger().error(error_msg)
                 break
 
-
     def _read_register(self, register):  # uint8 register value
+
+        """Read a register.
+
+        :param register: register to read.
+        :type register: int
+        :return: register's stored value.
+        :rtype: int
+        """
+
         register_value = self.bus.read_word_data(self.i2c_address, register)
         return register_value
 
 
     def _write_register(self, register, value):  # uint8 reg, uint16 value
+        """Write to a register.
+
+        :param register: register to be written to.
+        :type register: int
+        :param value: word of data to be written.
+        :type value: int
+        """
+
         self.bus.write_word_data(self.i2c_address, register, value)
 
 
-    def _write_and_verify_register(self, register, value): # uint8 reg, uint16 value
-        attempts = 0
+    def _write_and_verify_register(self, register, value, attempts=3): # uint8 reg, uint16 value
+
+        """Write to a register and verify that the value is written properly.
+
+        :param register: register to be written to.
+        :type register: int
+        :param value: word of data to be written.
+        :type value: int
+        :param attempts: _(optional)_ number of attempts before giving up and sending an error, defaults to 3.
+        :type attempts: int
+        """
+
+        _attempts = 0
         
         while True:
             self._write_register(register, value)
             self._register_timeout.sleep()
             if value != self._read_register(register):
-                attempts += 1
-            elif attempts >= 3:
+                _attempts += 1
+            elif _attempts >= attempts:
                 self.get_logger().error(f"Write Error: failed to write data ({value}) to register {register}.")
                 break
             else:
@@ -258,6 +329,10 @@ class BatteryNode(Node):
 
 
     def _save_params(self): 
+
+        """Save parameters to a json file every 64% that is charged and discharged.
+        """
+
         if self._read_register(Cycles_Reg) & 0b100000:  # check bit 6. COULD BE WRONG IF THE ENDIAN IS WRONG. 
             SAVED_RCOMP0 = self._read_register(RComp0_Reg)  # characterisation information for open circuit operation
             SAVED_TempCo = self._read_register(TempCo_Reg)  # temperature compensation information for RComp0 reg
@@ -278,6 +353,11 @@ class BatteryNode(Node):
 
 
     def _battery_callback(self, msg):
+
+        """Callback function from the subscriber, calls the get_battery_state method. 
+        Sets the BatteryState values and publishes to the publisher. 
+        """
+
         self.get_battery_state()
 
         # https://learn.adafruit.com/scanning-i2c-addresses/raspberry-pi 
@@ -298,6 +378,16 @@ class BatteryNode(Node):
 
 
     def _conv(self, value, register_type):
+
+        """Converts the register value with the documentation resolutions for each type.
+        
+        :param value: register's value
+        :type value: int
+        :param register_type: register's type, refer to the list of aliases at the start of the file.
+        :type register: str
+        :return: converted value
+        :rtype: float, None
+        """
 
         level = int.from_bytes(value)
         match register_type:
@@ -333,8 +423,11 @@ class BatteryNode(Node):
                 self.get_logger().info("Should implement manually.")
                 
 
-
     def get_battery_state(self):
+
+        """Reads the register values and stores it in a dictionary in the BatteryNode object. 
+        """
+
         self.state["RepCap"] = self._read_register(RepCap_Reg)  # Capacity in mAh  
         self.state["RepSOC"] = self._read_register(RepSOC_Reg)  # Capacity as a percentage, 256 levels. Round to nearest int. 
         # SOC means State of Charge. 
@@ -356,10 +449,3 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
-
-
-# TODO:
-# Add all the BatteryState variables
-# Ask about IchgTerm
-# QRTable AAAAAAAAA
-# Test the endianness of the system 

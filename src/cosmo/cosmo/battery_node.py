@@ -37,7 +37,9 @@ QoS = QoSProfile(
 
 # The Battery management chip is called the MAX17263, the code guide is below:
 # https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
-
+# And relevant data sheets:
+# https://www.analog.com/media/en/technical-documentation/data-sheets/MAX17263.pdf
+# https://www.analog.com/media/en/technical-documentation/user-guides/max1726x-modelgauge-m5-ez-user-guide.pdf
 
 class BatteryNode(Node):
 
@@ -69,6 +71,7 @@ class BatteryNode(Node):
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
+        self.state = {}
 
     def _init_chip(self):  # initialising the IC chip on powerup.
         STATUS_POR_BIT = self._read_register(0x00) & 0x0002
@@ -119,7 +122,7 @@ class BatteryNode(Node):
 
 
     def _wait(self, register, bit_mask, error_msg, timeout_seconds=10):
-        timeout_count = 0  # 1000 * 1e-2 = 10 seconds
+        _timeout_count = 0  # 1000 * 1e-2 = 10 seconds
         while self._read_register(register) & bit_mask != 0:
             self._timeout.sleep()
             _timeout_count += 1
@@ -171,7 +174,7 @@ class BatteryNode(Node):
         with open("battery_parameters.json", "w") as fs:
             json.dump(json_data, fs)
 
-    def _battery_callback(self, msg):  # NEED TO UPDATE THIS AND HAVE A STORAGE OBJ. 
+    def _battery_callback(self, msg):
         self.get_battery_state()
 
         # https://learn.adafruit.com/scanning-i2c-addresses/raspberry-pi 
@@ -179,9 +182,9 @@ class BatteryNode(Node):
 
         # Some form of data processing here to interpret the data, then convert it to a stdmsg type to send over ROS. 
 
-        msg = BatteryState() # Create a message of this type 
-        msg.voltage = self.battery_voltage # set this to the battery voltage
-        msg.percentage = self.percent_charge_level # and this to the percentage charge level of the battery
+        msg = BatteryState() # Create a message of this type, parameters are here: https://docs.ros2.org/foxy/api/sensor_msgs/msg/BatteryState.html
+        msg.voltage = self.state["VFOCV"]  # set this to the battery voltage
+        msg.percentage = round(100 * self.state["RepSOC"] / 256, ndigits=1)  # and this to the percentage charge level of the battery
 
         self.battery_pub.publish(msg) # Publish BatteryState message 
 
@@ -190,8 +193,12 @@ class BatteryNode(Node):
         RepSOC = self._read_register(0x06)  # Capacity as a percentage, 256 levels. Round to nearest int. 
         # SOC means State of Charge. 
         TTE = self._read_register(0x11)  # Time to Empty value, each level is 5.25 seconds. 
-        
-   
+        VFOCV = self._read_register(0xFB) # Open-Circuit Voltage, in volts apparently. No idea about the resolution. 
+
+        self.state["RepCap"] = RepCap
+        self.state["RepSOC"] = RepSOC
+        self.state["TTE"] = TTE
+        self.state["VFOCV"] = VFOCV
 
 def main(args=None):
     rclpy.init(args=args)
@@ -203,3 +210,10 @@ def main(args=None):
 
 if __name__ == "__main__":
     main()
+
+
+# TODO:
+# Add all the BatteryState variables
+# Ask about IchgTerm
+# QRTable AAAAAAAAA
+# Test the endianness of the system 

@@ -9,7 +9,7 @@ import gpiozero as gpio
 # https://gpiozero.readthedocs.io/en/latest/
 
 
-pins = {x: None for x in range(30)}
+pins = {x: None for x in range(40)}  # https://gpiozero.readthedocs.io/en/latest/recipes.html#pin-numbering
 
 InputPin = gpio.DigitalInputDevice  # shorter aliases for convenience
 OutputPin = gpio.DigitalOutputDevice 

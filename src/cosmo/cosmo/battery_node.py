@@ -56,7 +56,8 @@ DesignCap_Reg = 0x18  # Expected capacity of the cell (Capacity)
 VEmpty_Reg = 0x3A  # The empty voltage threshold and the recovery voltage (Special, read docs)
 ModelCfg_Reg = 0xDB  # Controls the basic options of the EZ algorithm (Special)
 IchgTerm_Reg = 0x1E  # Detects when a charge cycle has been completed with a set of conditions (Current)
-HibCfg_Reg = 0xBA
+HibCfg_Reg = 0xBA  # The HibCfg register controls hibernate mode functionality
+Command_Reg = 0x60  # Unless told explicitly to use this, do not use this. 
 Config_Reg = 0x1D  # Just to set bit 15 for TSEL. 
 
 # Algorithm Battery Parameters
@@ -69,7 +70,7 @@ TempCo_Reg = 0x39  # Temperature compensation information (Special)
 
 RepCap_Reg = 0x05  # Reported remaining capacity in mAh (Capacity) 
 RepSOC_Reg = 0x06  # Reported state-of-charge percentage output for GUI (Percentage) 
-FullCapRep_Reg = 0x10 # reports the full capacity that goes with RepCap, generally used for reporting to the GUI (Capacity)
+FullCapRep_Reg = 0x10  # reports the full capacity that goes with RepCap, generally used for reporting to the GUI (Capacity)
 FullCap_Reg = 0x35  # Don't use these, use FullCapRep instead. 
 FullCapNom_Reg = 0x23
 TTE_Reg = 0x11  # holds the estimated time to empty for the application under present temperature and load conditions (Time)
@@ -170,12 +171,12 @@ class BatteryNode(Node):
             return
 
         HibCFG = self._read_register(HibCfg_Reg)  # Store original HibCFG values
-        self._write_register(0x60, 0x90)  # exiting hibernate mode step 1
+        self._write_register(Command_Reg, 0x90)  # exiting hibernate mode step 1
         self._write_register(HibCfg_Reg, 0x0)  # step 2
-        self._write_register(0x60, 0x0)  # step 3
+        self._write_register(Command_Reg, 0x0)  # step 3
 
         msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 10 seconds."
-        self._wait(0x3D, 0x01, msg)  # Wait for DNR bit clear. 
+        self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
         
         self._write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
         self._write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
@@ -202,7 +203,7 @@ class BatteryNode(Node):
         # with this parameter apparently we're not supposed to use this but it asks to write it in the
         # documentation?
 
-        self._write_register(0xBA, HibCFG) # restore original HibCFG values. 
+        self._write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
 
     @staticmethod
     def _hex_to_dec(hex):
@@ -285,19 +286,52 @@ class BatteryNode(Node):
         # Some form of data processing here to interpret the data, then convert it to a stdmsg type to send over ROS. 
 
         msg = BatteryState() # Create a message of this type, parameters are here: https://docs.ros2.org/foxy/api/sensor_msgs/msg/BatteryState.html
-        msg.voltage = self.state["VFOCV"]  # set this to the battery voltage
-        msg.percentage = round(100 * self.state["RepSOC"] / 256, ndigits=1)  # and this to the percentage charge level of the battery
-        msg.current = self.state["SPPCurrent"] * 1e-3 # discharge current, negative when discharging. 
-        msg.charge = self.state["RepCap"] * 1e-3 # charge in Ah.
-        msg.capacity = self.state["FullCapRep"]  # capacity in Ah. 
-        msg.design_charge = self.state["DesignCap"]  # Design capacity
-        msg.percentage = self.state["RepSOC"] / 256  # charge percentage normalised from 0 to 1. 
+        msg.voltage = self._conv(self.state["AvgVCell"], "Voltage")  # set this to the battery voltage
+        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # and this to the percentage charge level of the battery
+        msg.current = self._conv(self.state["AvgCurrent"], "Current") # discharge current, negative when discharging. 
+        msg.charge = self._conv(self.state["RepCap"], "Capacity") # charge in Ah.
+        msg.capacity = self._conv(self.state["FullCapRep"], "Capacity")  # capacity in Ah. 
+        msg.design_charge = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
+        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # charge percentage normalised from 0 to 1. 
 
         self.battery_pub.publish(msg) # Publish BatteryState message 
 
 
     def _conv(self, value, register_type):
-        pass
+
+        level = int.from_bytes(value)
+        match register_type:
+            case "Capacity":
+                # SENSE resistor is 2mOhms, hence we have a resolution of 2.5mAh/level. 
+                return round(2.5e-3 * level)
+            
+            case "Percentage":    
+                # 256 levels, 1/256% per level.
+                return round(100 * (level / 256), 1)
+            
+            case "Voltage":
+                # 78.125uV/level, with a maximum of 5.11992V (per cell basis)
+                return round(78.125e-6 * level, 2)
+
+            case "Current":
+                # 0.78125mA/level, minimum of -25.6A and maximum of 25.5992A
+                return round(0.78125e-3 * level)
+
+            case "Temperature":
+                # (1/256)C/level, minimum of -128.0 and maximum of 127.996. 
+                return round((1/256) * level, 1)
+            
+            case "Resistance":
+                # 1/4096 per level, minimum of 0 and maximum of 15.99976.
+                return round((1/4096) * level, 1)
+
+            case "Time":
+                # 5.625s per level, minimum of 0 and maximum of 102.3984hrs. 
+                return (5.625 * level)
+
+            case "Special":
+                self.get_logger().info("Should implement manually.")
+                
 
 
     def get_battery_state(self):
@@ -305,8 +339,8 @@ class BatteryNode(Node):
         self.state["RepSOC"] = self._read_register(RepSOC_Reg)  # Capacity as a percentage, 256 levels. Round to nearest int. 
         # SOC means State of Charge. 
         self.state["TTE"] = self._read_register(TTE_Reg)  # Time to Empty value, each level is 5.25 seconds. 
-        self.state["AvgVCell_Reg"] = self._read_register(AvgVCell_Reg) # Open-Circuit Voltage, in volts apparently. No idea about the resolution. 
-        self.state["AvgCurrent_Reg"] = self._read_register(AvgCurrent_Reg) # Sustained peak current in mA 
+        self.state["AvgVCell"] = self._read_register(AvgVCell_Reg) # Open-Circuit Voltage, in volts apparently. No idea about the resolution. 
+        self.state["AvgCurrent"] = self._read_register(AvgCurrent_Reg) # Sustained peak current in mA 
         self.state["FullCapRep"] = self._read_register(FullCapRep_Reg)  # Capacity in Ah
         self.state["DesignCap"] = self._read_register(DesignCap_Reg)  # Design capacity in Ah
         # Age Register (%) = 100% x (FullCapRep Register / DesignCap Register)

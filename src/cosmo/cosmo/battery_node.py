@@ -367,12 +367,22 @@ class BatteryNode(Node):
 
         msg = BatteryState() # Create a message of this type, parameters are here: https://docs.ros2.org/foxy/api/sensor_msgs/msg/BatteryState.html
         msg.voltage = self._conv(self.state["AvgVCell"], "Voltage")  # set this to the battery voltage
-        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # and this to the percentage charge level of the battery
+        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # # charge percentage normalised from 0 to 1. 
         msg.current = self._conv(self.state["AvgCurrent"], "Current") # discharge current, negative when discharging. 
         msg.charge = self._conv(self.state["RepCap"], "Capacity") # charge in Ah.
         msg.capacity = self._conv(self.state["FullCapRep"], "Capacity")  # capacity in Ah. 
         msg.design_charge = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
-        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # charge percentage normalised from 0 to 1. 
+
+        # Power supply status:
+        # 0 = UNKNOWN
+        # 1 = CHARGING
+        # 2 = DISCHARGING
+        # 3 = NOT_CHARGING
+        # 4 = FULL
+
+        # msg.power_supply_status = 0 # haven't found an easy way to check the exact state of the battery with a single register.
+
+        msg.battery_present = self.state["BatteryPresent"]
 
         self.battery_pub.publish(msg) # Publish BatteryState message 
 
@@ -432,12 +442,19 @@ class BatteryNode(Node):
         self.state["RepSOC"] = self._read_register(RepSOC_Reg)  # Capacity as a percentage, 256 levels. Round to nearest int. 
         # SOC means State of Charge. 
         self.state["TTE"] = self._read_register(TTE_Reg)  # Time to Empty value, each level is 5.25 seconds. 
-        self.state["AvgVCell"] = self._read_register(AvgVCell_Reg) # Open-Circuit Voltage, in volts apparently. No idea about the resolution. 
+        self.state["AvgVCell"] = self._read_register(AvgVCell_Reg) # NOT SURE IF TO USE VFSOC/VFOCV vs AvgVCell. 
+        # The AvgVCell is an analog reading before being processed by the modelGauge algorith. 
+        
         self.state["AvgCurrent"] = self._read_register(AvgCurrent_Reg) # Sustained peak current in mA 
         self.state["FullCapRep"] = self._read_register(FullCapRep_Reg)  # Capacity in Ah
         self.state["DesignCap"] = self._read_register(DesignCap_Reg)  # Design capacity in Ah
         # Age Register (%) = 100% x (FullCapRep Register / DesignCap Register)
 
+        self.state["BatteryPresent"] = bool(self._read_register(Status_Reg) & 0b1000) # bit 3 of the Status Register is the Bst bit. 
+        
+        if self._read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
+            for i in range(3):  # To hammer the point home, let's repeat this three times. 
+                self.get_logger().error("Critical Error: Battery has been removed!") 
 
 def main(args=None):
     rclpy.init(args=args)

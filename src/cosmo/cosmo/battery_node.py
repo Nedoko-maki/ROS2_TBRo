@@ -137,7 +137,9 @@ class BatteryNode(Node):
         "IchgTerm": 0,  # Termination current, when charging current is between 0.125 * Ichgterm and 1.25 * Ichgterm it will terminate.
         "VEmpty": 0xA561, # VEmpty is considered 0%, the empty voltage target. Default is 3.3V, and a recovery voltage of 3.88V. 
         #For VEmpty, the docs are odd. It says a 10mV resolution with 8 bits, which is 256 levels(??), it probably is wrong at it is actually 20mV per level. 0-5.11V 
-        "FullSOCThr": 0x5005 # when VFSOC > FullSOCThr, it will stop charging. Default is 95% (0x5F05), 80% is 0x5005.
+        "FullSOCThr": 0x5005, # when VFSOC > FullSOCThr, it will stop charging. Default is 95% (0x5F05), 80% is 0x5005.
+       
+        "RSENSE": 2e-3  # storing the RSENSE resistance value here. 2mOhms according to the PiTOP schematic. 
         } 
     
     # Apparently 20%-80% is good for longetivity, research needs to be done on that though. 
@@ -333,7 +335,7 @@ class BatteryNode(Node):
         """Save parameters to a json file every 64% that is charged and discharged.
         """
 
-        if self._read_register(Cycles_Reg) & 0b100000:  # check bit 6. COULD BE WRONG IF THE ENDIAN IS WRONG. 
+        if self._read_register(Cycles_Reg) & 0b100000:  # check bit[5]. COULD BE WRONG IF THE ENDIAN IS WRONG. 
             SAVED_RCOMP0 = self._read_register(RComp0_Reg)  # characterisation information for open circuit operation
             SAVED_TempCo = self._read_register(TempCo_Reg)  # temperature compensation information for RComp0 reg
             SAVED_FullCapRep = self._read_register(FullCapRep_Reg) # reports the full capacity that goes with RepCap, generally used for reporting to the GUI
@@ -402,8 +404,9 @@ class BatteryNode(Node):
         level = int.from_bytes(value)
         match register_type:
             case "Capacity":
-                # SENSE resistor is 2mOhms, hence we have a resolution of 2.5mAh/level. 
-                return round(2.5e-3 * level)
+                # SENSE resistor is 2mOhms, hence we have a resolution of 2.5mAh/level. Max of 163.8375 Ah
+                res = 5e-6 / self.battery_params["RSENSE"]
+                return round(res * level)
             
             case "Percentage":    
                 # 256 levels, 1/256% per level.
@@ -415,7 +418,8 @@ class BatteryNode(Node):
 
             case "Current":
                 # 0.78125mA/level, minimum of -25.6A and maximum of 25.5992A
-                return round(0.78125e-3 * level)
+                res = 1.5625e-6 / self.battery_params["RSENSE"]
+                return round(res * level, 1)
 
             case "Temperature":
                 # (1/256)C/level, minimum of -128.0 and maximum of 127.996. 
@@ -450,7 +454,7 @@ class BatteryNode(Node):
         self.state["DesignCap"] = self._read_register(DesignCap_Reg)  # Design capacity in Ah
         # Age Register (%) = 100% x (FullCapRep Register / DesignCap Register)
 
-        self.state["BatteryPresent"] = bool(self._read_register(Status_Reg) & 0b1000) # bit 3 of the Status Register is the Bst bit. 
+        self.state["BatteryPresent"] = bool(self._read_register(Status_Reg) & 0b1000) # bit[3] of the Status Register is the Bst bit. 
         
         if self._read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
             for i in range(3):  # To hammer the point home, let's repeat this three times. 

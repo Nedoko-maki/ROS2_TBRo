@@ -153,15 +153,15 @@ class BatteryNode(Node):
         Initialises timers, the subscriber and publisher for communication with the control node. Calls the _init_chip method to start the MAX17263. 
         """
 
-        self.i2c_address = 0x02 # placeholder address 
+        self.i2c_address = 0x0a # placeholder address 
         self.bus = smbus.SMBus("/dev/i2c-1")  # I believe that this is the /dev/ bus number. This is different
         # from the I2C address, which will be found once I hook the MAX17263 chip up with the Pi.
  
-        timer_frequency = 1 # frequency of battery updates (Hz)
-        self._timer = self.create_timer(1/timer_frequency, self.get_battery_state)  # for updating the battery status  
+        timer_frequency = 0.5 # frequency of battery updates (Hz)
+        self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
         self._register_timeout = self.create_rate(1e-3, self.get_clock())  # for timeouts for verifying registers
         self._timeout = self.create_rate(1e-2, self.get_clock())  # for timeouts for initialising the chip
-        self._save_charge = self.create_timer(10, self._save_params)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
+        self._save_charge = self.create_timer(10, self._save_params, autostart=False)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
         self._check_IC_reset  = self.create_timer(30, self._init_chip) # every 30s, check if the fuel gauge has been reset, and re-init if it has. 
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
@@ -176,8 +176,12 @@ class BatteryNode(Node):
 
         https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
         """
+    
+        self.get_logger().info("STARTING INIT CHIP")
 
         STATUS_POR_BIT = self._read_register(Status_Reg) & 0x0002
+
+        self.get_logger().info(f"STATUSREG = {bin(self._read_register(Status_Reg))}")
 
         if STATUS_POR_BIT == 0: # check if the IC has been reset.
             self.get_battery_state()
@@ -217,6 +221,11 @@ class BatteryNode(Node):
         # guidance documentation? Help I'm losing it
 
         self._write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
+
+        self.get_logger().info("ENDING INIT CHIP")
+
+        self._timer.reset()
+        self._save_charge.reset()
 
     @staticmethod
     def _hex_to_dec(hex):

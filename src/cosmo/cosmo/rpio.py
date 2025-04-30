@@ -17,7 +17,7 @@ OutputPWMPin = gpio.PWMOutputDevice
 
 
 def set_pin(pin_number, pin_type, **kwargs):
-    if pins[pin_number] is not None:
+    if pins[pin_number] is None:
         pins[pin_number] = pin_type(pin_number, **kwargs)
     return pins[pin_number]
 

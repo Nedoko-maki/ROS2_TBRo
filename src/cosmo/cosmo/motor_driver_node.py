@@ -44,7 +44,8 @@ class MotorDriverNode(Node):
         "NSLEEP": 21
                         }  # As per spec, this is the GPIO pin IDs rather than the physical pin numbers. 
 
-    pwm_freq = 1e5 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz 
+    pwm_freq = 1e4 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz.
+    # EDIT: Just found out lgpio doesn't like +30kHz on software PWM, so I'll run 10k for now. 
 
     def __init__(self):
         super().__init__("motor_driver_node")
@@ -54,17 +55,16 @@ class MotorDriverNode(Node):
 
         for motor in [x for x in self.pins if x != "NSLEEP"]:
             for pin_name, pin in self.pins[motor].items():
+                # self.get_logger().debug(f"{motor}, pin_name: {pin_name}, {pin}")
                 match pin_name:
                     case "IN1": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
                     case "IN2": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
                     case "NFAULT": 
-                        self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
-                        self.pins[motor][pin_name].motor_name = motor
-                        self.pins[motor][pin_name].when_deactivated = self._fault_detected  
+                        self.pins[motor][pin_name] = {"motor": motor, "pin": rpio.set_pin(pin, InputPin)}
+                        self.pins[motor][pin_name]["pin"].when_deactivated = self._fault_detected  
                     case "SNSOUT": 
-                        self.pins[motor][pin_name] = rpio.set_pin(pin, InputPin)
-                        self.pins[motor][pin_name].motor_name = motor
-                        self.pins[motor][pin_name].when_deactivated = self._chopping_detected  
+                        self.pins[motor][pin_name] = {"motor": motor, "pin": rpio.set_pin(pin, InputPin)}
+                        self.pins[motor][pin_name]["pin"].when_deactivated = self._chopping_detected  
 
         # Device sleep mode: pull logic low for sleep mode. Otherwise set logic high. 
         self.pins["NSLEEP"] = rpio.set_pin(self.pins["NSLEEP"], OutputPin, active_high=True, initial_value=True) 

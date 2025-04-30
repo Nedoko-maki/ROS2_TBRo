@@ -25,7 +25,7 @@ setup(
             "flask_node = cosmo.flask_node:main",
             "model_node = cosmo.model_node:main",
             "motor_driver_node = cosmo.motor_driver_node:main",
-
+            "battery_node = cosmo.battery_node:main"
         ],
     },
 )

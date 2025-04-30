@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import RegisterEventHandler, LogInfo
+from launch.actions import RegisterEventHandler, LogInfo, EmitEvent
 from launch.events import Shutdown
 from launch.event_handlers import (OnShutdown)
 from launch.substitutions import LocalSubstitution
@@ -39,9 +39,12 @@ def generate_launch_description():
         ),
         RegisterEventHandler(
             OnShutdown(
-                on_shutdown=[LogInfo(
-                    msg=['Launch was shut down: ', LocalSubstitution('event.reason')]
-                )]
+                on_shutdown=[
+                    LogInfo(
+                        msg=['Launch was shut down: ', LocalSubstitution('event.reason')]
+                        ),
+                        #EmitEvent(event=Shutdown())
+                        ]
             )
         )
         ]

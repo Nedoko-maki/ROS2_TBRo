@@ -22,6 +22,14 @@ QoS = QoSProfile(
 )
 
 
+#
+# 
+# Doubt this reaches the final iteration of COSMO because of how processing intensive ML models can be. We haven't 
+# got the budget to buy an AI hat and I can't shell out that money sadly. 
+#
+#
+
+
 class ModelNode(Node):
 
     bridge = CvBridge()

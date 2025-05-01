@@ -333,7 +333,7 @@ class BatteryNode(Node):
             if value != self._read_register(register):
                 _attempts += 1
             elif _attempts >= attempts:
-                self.get_logger().error(f"Write Error: failed to write data ({value}) to register {register}.")
+                self.get_logger().error(f"Write Error: failed to write data '{hex(value)}' to register {register}.")
                 break
             else:
                 break
@@ -341,7 +341,7 @@ class BatteryNode(Node):
 
     def _save_params(self): 
 
-        """Save parameters to a json file every 64% that is charged and discharged.
+        """Save parameters to a json file every 64% that is charged and discharged. (Recommended by the datasheet to perform this)
         """
 
         if self._read_register(Cycles_Reg) & 0b100000:  # check bit[5]. COULD BE WRONG IF THE ENDIAN IS WRONG. 
@@ -384,7 +384,7 @@ class BatteryNode(Node):
         msg.capacity = self._conv(self.state["FullCapRep"], "Capacity")  # capacity in Ah. 
         msg.design_charge = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
 
-        # Power supply status:
+        # Power supply status (find in the ros2 docs):
         # 0 = UNKNOWN
         # 1 = CHARGING
         # 2 = DISCHARGING
@@ -392,6 +392,7 @@ class BatteryNode(Node):
         # 4 = FULL
 
         # msg.power_supply_status = 0 # haven't found an easy way to check the exact state of the battery with a single register.
+        # May need to calculate it manually (yuck). 
 
         msg.battery_present = self.state["BatteryPresent"]
 
@@ -466,8 +467,7 @@ class BatteryNode(Node):
         self.state["BatteryPresent"] = bool(self._read_register(Status_Reg) & 0b1000) # bit[3] of the Status Register is the Bst bit. 
         
         if self._read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
-            for i in range(3):  # To hammer the point home, let's repeat this three times. 
-                self.get_logger().error("Critical Error: Battery has been removed!") 
+            self.get_logger().error("Critical Error: Battery has been removed!") 
 
 def main(args=None):
     rclpy.init(args=args)

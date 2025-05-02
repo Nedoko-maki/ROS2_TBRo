@@ -153,9 +153,9 @@ class BatteryNode(Node):
         Initialises timers, the subscriber and publisher for communication with the control node. Calls the _init_chip method to start the MAX17263. 
         """
 
-        self.i2c_address = 0x0a # placeholder address 
-        self.bus = smbus.SMBus("/dev/i2c-1")  # I believe that this is the /dev/ bus number. This is different
-        # from the I2C address, which will be found once I hook the MAX17263 chip up with the Pi.
+        self.i2c_address = 0x6C # address defined in the user guide. 'Look up slave address'. Could alternatively
+        # be 0x36 for '7 MSb addresses', if 0x6C fails.  
+        self.bus = smbus.SMBus("/dev/i2c-1")  # the /dev/ bus number. Make sure the freq isn't faster than 400kHz.
  
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  

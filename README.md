@@ -25,5 +25,8 @@ When you want to install new packages, run ```. ./venv/bin/activate``` in the ro
 
 # TODO:
 
-- I have not built GStreamer, yet
-- 
+- Add perms for hardware PWM access. (pwmchip0, 1) (https://github.com/dotnet/iot/blob/main/Documentation/raspi-pwm.md)
+- test and implement hardware PWM, we have two options:
+    - 1. Ignore the problem and just use the given lib for hardware pwm python bindings, but then I have to write the equivalent motor handling code
+    - 2. Use the Pin library in gpiozero's library to make my own version so I can pass that into the Motor function so I don't have to rewrite the motor handling code
+

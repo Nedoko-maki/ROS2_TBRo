@@ -1,5 +1,5 @@
 import gpiozero as gpio
-
+import rpi_hardware_pwm as hw_pwm
 
 # This is meant to be a container for all the pins that can be accessed by any relevant module. 
 #
@@ -16,6 +16,10 @@ OutputPin = gpio.DigitalOutputDevice
 OutputPWMPin = gpio.PWMOutputDevice
 Motor = gpio.Motor
 
+# pwm0 = hw_pwm.HardwarePWM(pwm_channel=0, hz=0, chip=0)
+# pwm1 = hw_pwm.HardwarePWM(pwm_channel=0, hz=0, chip=1)
+# pwm0.start()
+
 class DRV8701_Motor(Motor):
     def __init__(self, forward, backward, *, enable=None, pwm=True, pin_factory=None, pwm_frequency=None):
         super().__init__(forward, backward, enable=enable, pwm=pwm, pin_factory=pin_factory)
@@ -23,8 +27,10 @@ class DRV8701_Motor(Motor):
         if not pwm_frequency:
             raise ValueError(f"Please set a PWM frequency for this motor!")
         
-        self.devices["forward_device"].pin.frequency = pwm_frequency 
-        self.devices["backward_device"].pin.frequency  = pwm_frequency
+        self.forward_device.frequency = pwm_frequency 
+        self.backward_device.frequency  = pwm_frequency
+    
+
 
     def stop(self):
         """

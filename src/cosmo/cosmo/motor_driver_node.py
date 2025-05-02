@@ -4,7 +4,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 
 from std_msgs.msg import Int16MultiArray, String
 import cosmo.rpio as rpio
-from cosmo.rpio import InputPin, OutputPin, OutputPWMPin
+from cosmo.rpio import InputPin, OutputPin, OutputPWMPin, Motor
 
 
 QoS = QoSProfile(
@@ -52,10 +52,20 @@ class MotorDriverNode(Node):
 
         self.control_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=String, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
+        # self.motors = {} 
 
         for motor in [x for x in self.pins if x != "NSLEEP"]:
+
+            # self.motors[motor] = Motor(
+            #     self.pins[motor]["IN1"],
+            #     self.pins[motor]["IN2"],
+            #     self.pins["NSLEEP"],
+            #     pwm=True
+            #                            )        
+
             for pin_name, pin in self.pins[motor].items():
                 # self.get_logger().debug(f"{motor}, pin_name: {pin_name}, {pin}")
+                
                 match pin_name:
                     case "IN1": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
                     case "IN2": self.pins[motor][pin_name] = rpio.set_pin(pin, OutputPWMPin, initial_value=False, frequency=self.pwm_freq)
@@ -77,7 +87,7 @@ class MotorDriverNode(Node):
 
 
     def _chopping_detected(self, device):
-        self.get_logger().warn(f"Motor Fault: {device.motor_name} has pulled SNSOUT low. The drive current has hit the current chopping threshold")
+        self.get_logger().warn(f"Motor Fault: {device.motor_name} has pulled SNSOUT low. The drive current has hit the current chopping threshold.")
 
 
     def _control_callback(self, msg):

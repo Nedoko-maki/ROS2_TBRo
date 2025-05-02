@@ -14,6 +14,36 @@ pins = {x: None for x in range(40)}  # https://gpiozero.readthedocs.io/en/latest
 InputPin = gpio.DigitalInputDevice  # shorter aliases for convenience
 OutputPin = gpio.DigitalOutputDevice 
 OutputPWMPin = gpio.PWMOutputDevice
+Motor = gpio.Motor
+
+class DRV8701_Motor(Motor):
+    def __init__(self, forward, backward, *, enable=None, pwm=True, pin_factory=None, pwm_frequency=None):
+        super().__init__(forward, backward, enable=enable, pwm=pwm, pin_factory=pin_factory)
+
+        if not pwm_frequency:
+            raise ValueError(f"Please set a PWM frequency for this motor!")
+        
+        self.devices["forward_device"].pin.frequency = pwm_frequency 
+        self.devices["backward_device"].pin.frequency  = pwm_frequency
+
+    def stop(self):
+        """
+        Stop/Brake the motor.
+        """
+        self.forward_device.on()  # Custom functions for the DRV8701 motor. 
+        self.backward_device.on()
+
+    def coast(self):
+        """
+        Let the motor coast.
+        """
+        self.forward_device.off()  
+        self.backward_device.off()
+
+
+
+
+
 
 
 def set_pin(pin_number, pin_type, **kwargs):

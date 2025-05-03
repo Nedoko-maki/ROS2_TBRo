@@ -1,5 +1,6 @@
 import gpiozero as gpio
 from rpi_hardware_pwm import HardwarePWM
+import os
 
 # This is meant to be a container for all the pins that can be accessed by any relevant module. 
 #
@@ -26,6 +27,18 @@ nSLEEP  IN1 IN2 Description
 1       1   0   Forward
 1       1   1   Brake
 """
+
+"""CURSED. DO NOT DO THIS NORMALLY, BUT WE ARE USING SYSFS INTERFACE AND EXPORT PERMS WEREN'T WORKING SO HERE WE ARE."""
+
+commands = ["sudo chown -R root:dialout /sys/class/pwm",
+            "sudo chmod -R 777 /sys/class/pwm",
+            "sudo chown -R root:dialout /sys/devices/platform/soc/*.pwm/pwm/pwmchip*",
+            "sudo chmod -R 777 /sys/devices/platform/soc/*.pwm/pwm/pwmchip*"
+            ]
+
+for cmd in commands:
+    os.system(cmd)
+
 
 class DRV8701_Motor:
 
@@ -114,7 +127,7 @@ class DRV8701_Motor:
         """
         self.value = -self.value
 
-    def stop(self):
+    def brake(self):
         """
         Stop/Brake the motor.
         """
@@ -137,6 +150,11 @@ class DRV8701_Motor:
 
 
 class DRV8701_Motor_LGPIO(Motor):
+
+    """
+    Not really using this anymore, unless the other method stops working. 
+    """
+
     def __init__(self, forward, backward, *, enable=None, pwm=True, pin_factory=None, pwm_frequency=None):
         super().__init__(forward, backward, enable=enable, pwm=pwm, pin_factory=pin_factory)
 
@@ -145,8 +163,6 @@ class DRV8701_Motor_LGPIO(Motor):
         
         self.forward_device.frequency = pwm_frequency 
         self.backward_device.frequency  = pwm_frequency
-    
-
 
     def stop(self):
         """
@@ -172,11 +188,8 @@ def get_pin(pin_number):
     return pins[pin_number]
 
 
-PWMPin0 = HardwarePWM(pwm_channel=0, hz=0, chip=0)
-PWMPin3 = HardwarePWM(pwm_channel=3, hz=0, chip=1)
-PWMPin1 = HardwarePWM(pwm_channel=1, hz=0, chip=0)
-PWMPin2 = HardwarePWM(pwm_channel=2, hz=0, chip=1)
-
-MotorSet1 = DRV8701_Motor(PWMPin0, PWMPin1, pwm_frequency=4e4)
-MotorSet2 = DRV8701_Motor(PWMPin2, PWMPin3, pwm_frequency=4e4)
+PWMPin0 = HardwarePWM(pwm_channel=0, hz=0.1, chip=1)
+PWMPin1 = HardwarePWM(pwm_channel=1, hz=0.2, chip=1)
+PWMPin2 = HardwarePWM(pwm_channel=2, hz=0.3, chip=1)
+PWMPin3 = HardwarePWM(pwm_channel=3, hz=0.4, chip=1)
 

@@ -4,7 +4,15 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 
 from std_msgs.msg import Int16MultiArray, String
 import cosmo.rpio as rpio
-from cosmo.rpio import InputPin, OutputPin, OutputPWMPin, DRV8701_Motor
+from cosmo.rpio import (
+    DRV8701_Motor, 
+    InputPin, 
+    OutputPin, 
+    PWMPin0, 
+    PWMPin1, 
+    PWMPin2, 
+    PWMPin3
+                        ) 
 
 
 QoS = QoSProfile(
@@ -44,24 +52,21 @@ class MotorDriverNode(Node):
         "NSLEEP": 21
                         }  # As per spec, this is the GPIO pin IDs rather than the physical pin numbers. 
 
-    pwm_freq = 1e4 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz.
+    pwm_freq = 4e4 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz.
     # EDIT: Just found out lgpio doesn't like +30kHz on software PWM, so I'll run 10k for now. 
+
+    
 
     def __init__(self):
         super().__init__("motor_driver_node")
 
         self.control_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=String, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
-        self.motors = {} 
+        self.motor_set_L = DRV8701_Motor(PWMPin0, PWMPin1, pwm_frequency=self.pwm_freq)
+        self.motor_set_R = DRV8701_Motor(PWMPin2, PWMPin3, pwm_frequency=self.pwm_freq)
+        self._log(f"pwm1: {PWMPin1.does_pwmX_exists()}")
 
         for motor in [x for x in self.pins if x != "NSLEEP"]:
-
-            self.motors[motor] = DRV8701_Motor(
-                self.pins[motor]["IN1"],
-                self.pins[motor]["IN2"],
-                enable=self.pins["NSLEEP"],
-                pwm_frequency=1e5
-                                                )        
 
             for pin_name, pin in self.pins[motor].items():
                 # self.get_logger().debug(f"{motor}, pin_name: {pin_name}, {pin}")
@@ -80,6 +85,10 @@ class MotorDriverNode(Node):
         self.pins["NSLEEP"] = rpio.set_pin(self.pins["NSLEEP"], OutputPin, active_high=True, initial_value=True) 
 
         # TI documentation on the motor drivers: https://www.ti.com/lit/ds/symlink/drv8701.pdf
+
+
+    def _log(self, msg):
+        self.get_logger().info(msg)
 
 
     def _fault_detected(self, device):
@@ -101,30 +110,36 @@ class MotorDriverNode(Node):
         # the data across topics and nodes. 
 
         # First instantiate the message type, e.g. msg = String(), and then access the member data, msg.data = "whatever". Bingo!
-        
-        motors = [x for x in self.pins if x != "NSLEEP"]
-        
-        match msg.data:    
+                
+        if ":" in msg.data:
+            command, value = msg.data.split(":")
+        else:
+            command = msg.data
+
+        match command:    
             case "forward":
-                for motor in motors:
-                    self.pins[motor]["IN1"].on()
-                    self.pins[motor]["IN2"].off()
+
+                self.motor_set_L.forward(value)
+                self.motor_set_R.forward(value)
 
             case "reverse":
-                for motor in motors:
-                    self.pins[motor]["IN1"].off()
-                    self.pins[motor]["IN2"].on()
+                self.motor_set_L.backward(value)
+                self.motor_set_R.backward(value)
+
+            case "motor_left":
+                self.motor_set_L.value = value
+            
+            case "motor_right":
+                self.motor_set_R.value = value
 
             case "coast":
-                for motor in motors:
-                    self.pins[motor]["IN1"].off()
-                    self.pins[motor]["IN2"].off()
+                self.motor_set_L.coast()
+                self.motor_set_R.coast()
 
             case "brake":
-                for motor in motors:
-                    self.pins[motor]["IN1"].on()
-                    self.pins[motor]["IN2"].on()
-
+                self.motor_set_L.brake()
+                self.motor_set_R.brake()
+            
             case "sleep": self.pins["NSLEEP"].off()
             case "wake": self.pins["NSLEEP"].on()
 

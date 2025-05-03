@@ -168,6 +168,7 @@ class BatteryNode(Node):
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
         self.state = {}
+        self._is_address()  # check that i2c address 0x6c is connected and readable. 
         self._init_chip()
 
     def _init_chip(self):  # initialising the IC chip on powerup.
@@ -227,6 +228,18 @@ class BatteryNode(Node):
         self._timer.reset()
         self._save_charge.reset()
 
+    def _is_address(self):
+        """Checks if an i2c address exists.
+
+        :return: bool
+        :rtype: bool
+        """
+
+        try: 
+            _ = self._read_register(Status_Reg)
+        except OSError as e:
+            raise OSError(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")
+        
     @staticmethod
     def _hex_to_dec(hex):
         """Converts hexidecimal strings into actual base-16 numerical values.

@@ -5,13 +5,9 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from std_msgs.msg import Int16MultiArray, String
 import cosmo.rpio as rpio
 from cosmo.rpio import (
-    DRV8701_Motor, 
+    DRV8701_Motor_LGPIO, 
     InputPin, 
     OutputPin, 
-    PWMPin0, 
-    PWMPin1, 
-    PWMPin2, 
-    PWMPin3
                         ) 
 
 
@@ -52,7 +48,7 @@ class MotorDriverNode(Node):
         "NSLEEP": 21
                         }  # As per spec, this is the GPIO pin IDs rather than the physical pin numbers. 
 
-    pwm_freq = 4e4 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz.
+    pwm_freq = 1e4 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz.
     # EDIT: Just found out lgpio doesn't like +30kHz on software PWM, so I'll run 10k for now. 
 
     
@@ -62,9 +58,8 @@ class MotorDriverNode(Node):
 
         self.control_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=String, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
-        self.motor_set_L = DRV8701_Motor(PWMPin0, PWMPin1, pwm_frequency=self.pwm_freq)
-        self.motor_set_R = DRV8701_Motor(PWMPin2, PWMPin3, pwm_frequency=self.pwm_freq)
-        self._log(f"pwm1: {PWMPin1.does_pwmX_exists()}")
+        self.motor_set_L = DRV8701_Motor_LGPIO(12, 18, pwm_frequency=self.pwm_freq)
+        self.motor_set_R = DRV8701_Motor_LGPIO(19, 13, pwm_frequency=self.pwm_freq)
 
         for motor in [x for x in self.pins if x != "NSLEEP"]:
 
@@ -113,6 +108,7 @@ class MotorDriverNode(Node):
                 
         if ":" in msg.data:
             command, value = msg.data.split(":")
+            value = float(value)
         else:
             command = msg.data
 

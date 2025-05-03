@@ -40,7 +40,7 @@ class ControlNode(Node):
         self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
-        self.test_motors()
+        self.test_motors()  ## some test code 
 
     def _motor_callback(self, msg):
         pass
@@ -62,7 +62,7 @@ class ControlNode(Node):
     
     def test_motors(self):
         msg = String()
-        msg.data = "forward"
+        msg.data = "forward:0.1"
         self.motor_pub.publish(msg)
 
 

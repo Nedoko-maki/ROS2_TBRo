@@ -159,19 +159,34 @@ class BatteryNode(Node):
  
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
-        self._register_timeout = self.create_rate(1e3, self.get_clock())  # for timeouts for verifying registers
-        self._timeout = self.create_rate(1e2, self.get_clock())  # for timeouts for initialising the chip
+        self._register_timeout = self.create_rate(1e3)  # for timeouts for verifying registers
+        self._timeout = self.create_rate(1e2)  # for timeouts for initialising the chip
         self._save_charge = self.create_timer(10, self._save_params, autostart=False)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
-        self._check_IC_reset  = self.create_timer(30, self._init_chip) # every 30s, check if the fuel gauge has been reset, and re-init if it has. 
+        self._check_IC_reset  = self.create_timer(30, self._check_reset) # every 30s, check if the fuel gauge has been reset, and re-init if it has. 
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
         self.state = {}
         self._is_address()  # check that i2c address 0x6c is connected and readable. 
-        self._init_chip()
+        self._check_reset()
 
-    def _init_chip(self):  # initialising the IC chip on powerup.
+
+    def _check_reset(self):
+        """Checks if a IC reset has occurred in the last 30 seconds.
+        """
+        
+        STATUS_POR_BIT = self._read_register(Status_Reg) & 0x0002
+
+        self.get_logger().info(f"STATUSREG = {bin(self._read_register(Status_Reg))}")
+
+        if STATUS_POR_BIT == 0: # check if the IC has been reset.
+            self.get_battery_state()
+            return
+        else:
+            self.init_chip()
+
+    def init_chip(self):  # initialising the IC chip on powerup.
 
         """Goes through the given startup commands to wake up the MAX17263 chip as described here:
 
@@ -180,32 +195,30 @@ class BatteryNode(Node):
     
         self.get_logger().info("STARTING INIT CHIP")
 
-        STATUS_POR_BIT = self._read_register(Status_Reg) & 0x0002
-
-        self.get_logger().info(f"STATUSREG = {bin(self._read_register(Status_Reg))}")
-
-        if STATUS_POR_BIT == 0: # check if the IC has been reset.
-            self.get_battery_state()
-            return
-
         HibCFG = self._read_register(HibCfg_Reg)  # Store original HibCFG values
         self._write_register(Command_Reg, 0x90)  # exiting hibernate mode step 1
         self._write_register(HibCfg_Reg, 0x0)  # step 2
         self._write_register(Command_Reg, 0x0)  # step 3
 
-        msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 10 seconds."
+        msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 5 seconds."
         self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
         
+        self.get_logger().info(f"FSTAT.DNR cleared.")
+
         self._write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
         self._write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
         self._write_register(VEmpty_Reg, self.battery_params["VEmpty"])
-        self._write_and_verify_register(FullSOCThr_Reg, self.battery_params["FullSOCThr"])
+        self._write_register(FullSOCThr_Reg, self.battery_params["FullSOCThr"])
+
+        self.get_logger().info(f"test breakpoint 1.")
 
         self._write_register(Config_Reg, self._read_register(Config_Reg) | 0x8000)  # Setting TSEL to 1 for external NTC. Might need to be placed elsewhere in case it breaks something.
         self._write_register(ModelCfg_Reg, self.model_cfg)  # Set the ModelCfg register
-         
+        
         msg_2 = f"Timeout: the ModelCFG.Refresh bit (bit 15) confirming model loading was not cleared."
         self._wait(ModelCfg_Reg, 0x8000, msg_2) # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading.
+
+        self.get_logger().info(f"ModelCFG loaded.")
 
         json_data = self._read_json()
 
@@ -239,6 +252,8 @@ class BatteryNode(Node):
             _ = self._read_register(Status_Reg)
         except OSError as e:
             raise OSError(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")
+        
+        return True
         
     @staticmethod
     def _hex_to_dec(hex):
@@ -278,7 +293,7 @@ class BatteryNode(Node):
             self.get_logger().error(f"FileNotFoundError: {file} was not found, falling back to default values.")
             return None
         
-    def _wait(self, register, bit_mask, error_msg, timeout_seconds=10):
+    def _wait(self, register, bit_mask, error_msg, timeout_seconds=5):
 
         """ Waits for a bit or a set of bits to be toggled.
 
@@ -291,11 +306,12 @@ class BatteryNode(Node):
         :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
         :type timeout_seconds: int
         """
-
-        _timeout_count = 0  # 1000 * 1e-2 = 10 seconds
+        self.get_logger().info(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+        _timeout_count = 0
         while self._read_register(register) & bit_mask != 0:
             self._timeout.sleep()
             _timeout_count += 1
+            self.get_logger.info(f"timeout count: {_timeout_count}")
             if _timeout_count * 1e-2 > timeout_seconds:
                 self.get_logger().error(error_msg)
                 break
@@ -309,7 +325,7 @@ class BatteryNode(Node):
         :return: register's stored value.
         :rtype: int
         """
-
+        self.get_logger().info(f"Reading register {hex(register)}")
         register_value = self.bus.read_word_data(self.i2c_address, register)
         return register_value
 
@@ -322,34 +338,34 @@ class BatteryNode(Node):
         :param value: word of data to be written.
         :type value: int
         """
-
+        self.get_logger().info(f"Writing value {hex(value)} to register {hex(register)}")
         self.bus.write_word_data(self.i2c_address, register, value)
 
 
-    def _write_and_verify_register(self, register, value, attempts=3): # uint8 reg, uint16 value
+    # def _write_and_verify_register(self, register, value, attempts=3): # uint8 reg, uint16 value
 
-        """Write to a register and verify that the value is written properly.
+    #     """Write to a register and verify that the value is written properly.
 
-        :param register: register to be written to.
-        :type register: int
-        :param value: word of data to be written.
-        :type value: int
-        :param attempts: _(optional)_ number of attempts before giving up and sending an error, defaults to 3.
-        :type attempts: int
-        """
+    #     :param register: register to be written to.
+    #     :type register: int
+    #     :param value: word of data to be written.
+    #     :type value: int
+    #     :param attempts: _(optional)_ number of attempts before giving up and sending an error, defaults to 3.
+    #     :type attempts: int
+    #     """
 
-        _attempts = 0
+    #     _attempts = 0
         
-        while True:
-            self._write_register(register, value)
-            self._register_timeout.sleep()
-            if value != self._read_register(register):
-                _attempts += 1
-            elif _attempts >= attempts:
-                self.get_logger().error(f"Write Error: failed to write data '{hex(value)}' to register {register}.")
-                break
-            else:
-                break
+    #     while True:
+    #         self._write_register(register, value)
+    #         self._register_timeout.sleep()
+    #         if value != self._read_register(register):
+    #             _attempts += 1
+    #         elif _attempts >= attempts:
+    #             self.get_logger().error(f"Write Error: failed to write data '{hex(value)}' to register {register}.")
+    #             break
+    #         else:
+    #             break
 
 
     def _save_params(self): 

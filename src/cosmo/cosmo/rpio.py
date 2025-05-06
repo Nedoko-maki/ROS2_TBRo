@@ -146,7 +146,7 @@ class DRV8701_Motor_LGPIO(Motor):
         self.forward_device.frequency = pwm_frequency 
         self.backward_device.frequency  = pwm_frequency
 
-    def stop(self):
+    def brake(self):
         """
         Stop/Brake the motor.
         """

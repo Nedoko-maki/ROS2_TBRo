@@ -105,7 +105,11 @@ class MotorDriverNode(Node):
         # the data across topics and nodes. 
 
         # First instantiate the message type, e.g. msg = String(), and then access the member data, msg.data = "whatever". Bingo!
-                
+        
+        # The message format goes as follows:
+        # any of the below, such as 'forward', and if the case has a value inside, then follow up with a semicolon and the value after.
+        # e.g. 'forward:0.1' 
+
         if ":" in msg.data:
             command, value = msg.data.split(":")
             value = float(value)

@@ -6,6 +6,7 @@ from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
     depth=10,  # Queue size of 10
@@ -29,6 +30,12 @@ QoS = QoSProfile(
 #
 #
 
+# Using this model with 2.2M params vs DepthAnythingV2's 24.8M on their smallest model. 
+# https://github.com/noahzn/Lite-Mono?tab=readme-ov-file
+
+
+
+
 
 class ModelNode(Node):
 
@@ -39,6 +46,9 @@ class ModelNode(Node):
 
         self.model_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/model/output", qos_profile=QoS)
         self.flask_sub = self.create_subscription(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS, callback=self._model_callback)
+
+        # import cosmo.model.test_simple as model_test
+        # model_test.test_simple()
 
 
     def _model_callback(self, msg):

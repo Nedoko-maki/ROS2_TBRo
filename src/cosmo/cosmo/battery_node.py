@@ -159,8 +159,8 @@ class BatteryNode(Node):
  
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
-        self._register_timeout = self.create_rate(1e-3, self.get_clock())  # for timeouts for verifying registers
-        self._timeout = self.create_rate(1e-2, self.get_clock())  # for timeouts for initialising the chip
+        self._register_timeout = self.create_rate(1e3, self.get_clock())  # for timeouts for verifying registers
+        self._timeout = self.create_rate(1e2, self.get_clock())  # for timeouts for initialising the chip
         self._save_charge = self.create_timer(10, self._save_params, autostart=False)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
         self._check_IC_reset  = self.create_timer(30, self._init_chip) # every 30s, check if the fuel gauge has been reset, and re-init if it has. 
 

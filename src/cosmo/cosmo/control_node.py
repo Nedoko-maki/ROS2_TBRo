@@ -80,6 +80,7 @@ class ControlNode(Node):
         for cmd in test_commands:
             msg = String()
             msg.data = cmd
+            self.test_timer.sleep()
             self.motor_pub.publish(msg)
 
 

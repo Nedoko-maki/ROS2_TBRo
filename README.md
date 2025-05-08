@@ -1,7 +1,7 @@
 ## ROS2 TBRo Packages
 
 # Includes: 
-- COSMO
+- COSMO for the GDBP 
 - AI node for TBRo Student-Led team
 
 # To use:
@@ -25,5 +25,5 @@ When you want to install new packages, run ```. ./venv/bin/activate``` in the ro
 
 # TODO:
 
-- I have not built GStreamer, yet
-- 
+- Add debugging colour console output
+- Dockerise the whole thing?

@@ -146,12 +146,14 @@ class BatteryNode(Node):
 
     model_cfg = 0b1000010000000000  # refer to the ModelCFG page. Bit 10 and 15 are set (hopefully the correct endian)
 
-    def __init__(self):  # initialising the ROS2 node
+    def __init__(self, debugging_mode=False):  # initialising the ROS2 node
         super().__init__("battery_node")
 
         """
         Initialises timers, the subscriber and publisher for communication with the control node. Calls the _init_chip method to start the MAX17263. 
         """
+
+        self.debug = debugging_mode
 
         self.i2c_address = 0x6C # address defined in the user guide. 'Look up slave address'. Could alternatively
         # be 0x36 for '7 MSb addresses', if 0x6C fails.  
@@ -172,13 +174,31 @@ class BatteryNode(Node):
         self._check_reset()
 
 
+    def _log(self, level, string):
+
+        logger = self.get_logger()
+
+        match level:
+            case "debug":
+                if self.debug:
+                    logger.debug(string)
+            case "info":
+                logger.info(string)
+            case "warn":
+                logger.warn(string)
+            case "error":
+                logger.error(string)
+            case "fault":
+                logger.fault(string)
+
+
     def _check_reset(self):
         """Checks if a IC reset has occurred in the last 30 seconds.
         """
         
         STATUS_POR_BIT = self._read_register(Status_Reg) & 0x0002
-
-        self.get_logger().info(f"STATUSREG = {bin(self._read_register(Status_Reg))}")
+        
+        self._log("debug", f"STATUSREG = {bin(self._read_register(Status_Reg))}")
 
         if STATUS_POR_BIT == 0: # check if the IC has been reset.
             self.get_battery_state()
@@ -193,7 +213,7 @@ class BatteryNode(Node):
         https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
         """
     
-        self.get_logger().info("STARTING INIT CHIP")
+        self._log("debug", "STARTING INIT CHIP")
 
         HibCFG = self._read_register(HibCfg_Reg)  # Store original HibCFG values
         self._write_register(Command_Reg, 0x90)  # exiting hibernate mode step 1
@@ -203,14 +223,14 @@ class BatteryNode(Node):
         msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 5 seconds."
         self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
         
-        self.get_logger().info(f"FSTAT.DNR cleared.")
+        self._log("debug", f"FSTAT.DNR cleared.")
 
         self._write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
         self._write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
         self._write_register(VEmpty_Reg, self.battery_params["VEmpty"])
         self._write_register(FullSOCThr_Reg, self.battery_params["FullSOCThr"])
 
-        self.get_logger().info(f"test breakpoint 1.")
+        self._log("debug", f"test breakpoint 1.")
 
         self._write_register(Config_Reg, self._read_register(Config_Reg) | 0x8000)  # Setting TSEL to 1 for external NTC. Might need to be placed elsewhere in case it breaks something.
         self._write_register(ModelCfg_Reg, self.model_cfg)  # Set the ModelCfg register
@@ -218,7 +238,7 @@ class BatteryNode(Node):
         msg_2 = f"Timeout: the ModelCFG.Refresh bit (bit 15) confirming model loading was not cleared."
         self._wait(ModelCfg_Reg, 0x8000, msg_2) # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading.
 
-        self.get_logger().info(f"ModelCFG loaded.")
+        self._log("debug", f"ModelCFG loaded.")
 
         json_data = self._read_json()
 
@@ -236,7 +256,7 @@ class BatteryNode(Node):
 
         self._write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
 
-        self.get_logger().info("ENDING INIT CHIP")
+        self._log("debug", "ENDING INIT CHIP")
 
         self._timer.reset()
         self._save_charge.reset()
@@ -290,7 +310,7 @@ class BatteryNode(Node):
             return json_data
         
         except FileNotFoundError:
-            self.get_logger().error(f"FileNotFoundError: {file} was not found, falling back to default values.")
+            self._log("error", f"FileNotFoundError: {file} was not found, falling back to default values.")
             return None
         
     def _wait(self, register, bit_mask, error_msg, timeout_seconds=5):
@@ -306,12 +326,13 @@ class BatteryNode(Node):
         :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
         :type timeout_seconds: int
         """
-        self.get_logger().info(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+        self._log("debug", f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+
         _timeout_count = 0
         while self._read_register(register) & bit_mask != 0:
             self._timeout.sleep()
             _timeout_count += 1
-            self.get_logger.info(f"timeout count: {_timeout_count}")
+            self._log("debug", f"timeout count: {_timeout_count}")
             if _timeout_count * 1e-2 > timeout_seconds:
                 self.get_logger().error(error_msg)
                 break
@@ -325,7 +346,7 @@ class BatteryNode(Node):
         :return: register's stored value.
         :rtype: int
         """
-        self.get_logger().info(f"Reading register {hex(register)}")
+        self._log("debug", f"Reading register {hex(register)}")
         register_value = self.bus.read_word_data(self.i2c_address, register)
         return register_value
 
@@ -338,7 +359,7 @@ class BatteryNode(Node):
         :param value: word of data to be written.
         :type value: int
         """
-        self.get_logger().info(f"Writing value {hex(value)} to register {hex(register)}")
+        self._log("debug", f"Writing value {hex(value)} to register {hex(register)}")
         self.bus.write_word_data(self.i2c_address, register, value)
 
 
@@ -473,7 +494,7 @@ class BatteryNode(Node):
                 return (5.625 * level)
 
             case "Special":
-                self.get_logger().info("Should implement manually.")
+                self._log("info", "Should implement manually.")
                 
 
     def get_battery_state(self):
@@ -496,11 +517,11 @@ class BatteryNode(Node):
         self.state["BatteryPresent"] = bool(self._read_register(Status_Reg) & 0b1000) # bit[3] of the Status Register is the Bst bit. 
         
         if self._read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
-            self.get_logger().error("Critical Error: Battery has been removed!") 
+            self._log("error", "Critical Error: Battery has been removed!") 
 
 def main(args=None):
     rclpy.init(args=args)
-    _battery_node = BatteryNode()
+    _battery_node = BatteryNode(debugging_mode=True)
     rclpy.spin(_battery_node)
     _battery_node.destroy_node()
     rclpy.shutdown()

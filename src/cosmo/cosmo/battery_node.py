@@ -328,6 +328,11 @@ class BatteryNode(Node):
         """
         self._log("debug", f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
 
+        # I feel like by all means this shouldn't block the entire thread and die a horrible static death, 
+        # but here we are.
+
+        # Rate is a Timer in a wrapper with preset params by rclpy. 
+
         _timeout_count = 0
         while self._read_register(register) & bit_mask != 0:
             self._timeout.sleep()

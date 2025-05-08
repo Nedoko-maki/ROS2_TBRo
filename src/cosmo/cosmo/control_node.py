@@ -40,7 +40,10 @@ class ControlNode(Node):
         self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
-        self.test_motors()
+        self.battery_data = None
+
+        self.test_timer = self.create_rate(0.2, self.get_clock())
+        self.test_motors()  ## some test code 
 
     def _motor_callback(self, msg):
         pass
@@ -49,7 +52,8 @@ class ControlNode(Node):
         pass
 
     def _battery_callback(self, msg):
-        pass
+        self.battery_data = msg  # need to review the msg source code to find out how to unpack values quickly rather than do it line by line. 
+        # if it comes to it I can use getattr(), but it's not very pythonic...
 
     def _model_callback(self, msg):
         pass
@@ -61,9 +65,27 @@ class ControlNode(Node):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")
     
     def test_motors(self):
-        msg = String()
-        msg.data = "forward"
-        self.motor_pub.publish(msg)
+        
+        test_commands = [
+            "forward:0.1",
+            "reverse:0.2",
+            "motor_left:0.3",
+            "motor_right:0.25",
+            "coast",
+            "brake",
+            "sleep",
+            "wake"
+                        ]
+
+        for cmd in test_commands:
+            msg = String()
+            msg.data = cmd
+            self.test_timer.sleep()
+            self.motor_pub.publish(msg)
+
+
+
+
 
 
 

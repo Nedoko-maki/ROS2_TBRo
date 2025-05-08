@@ -43,7 +43,7 @@ def generate_launch_description():
                     LogInfo(
                         msg=['Launch was shut down: ', LocalSubstitution('event.reason')]
                         ),
-                        #EmitEvent(event=Shutdown())
+                        # EmitEvent(event=Shutdown())
                         ]
             )
         )

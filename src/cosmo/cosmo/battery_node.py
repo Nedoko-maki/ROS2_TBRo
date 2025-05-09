@@ -27,13 +27,6 @@ QoS = QoSProfile(
     reliability=ReliabilityPolicy.BEST_EFFORT,  # attempt to deliver samples, 
     # but lose them if the network isn't robust
     durability=DurabilityPolicy.VOLATILE, # no attempt to persist samples. 
-    # deadline=
-    # lifespan=
-    # liveliness=
-    # liveliness_lease_duration=
-
-    # refer to QoS ros documentation and 
-    # QoSProfile source code for kwargs and what they do
 )
 
 # Might be a good idea to change the QoS settings for battery data. (Important to keep all data? Make sure all all data is received?)

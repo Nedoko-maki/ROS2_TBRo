@@ -74,5 +74,3 @@ def main(args=None):
         __model_node.destroy_node()
         rclpy.try_shutdown()
 
-if __name__ == "__main__":
-    main()

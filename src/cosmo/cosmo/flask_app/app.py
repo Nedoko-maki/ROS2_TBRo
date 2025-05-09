@@ -3,61 +3,78 @@ from flask import Flask, Response, render_template, request, url_for
 import cv2
 import time
 import threading
-import os
-from pathlib import Path 
-
-def rel_path(filepath):
-    return Path(os.path.dirname(__file__), filepath)
-
-
+import socket
+import subprocess
 
 qr_codes = []
+scanQRevent = threading.Event()
 
 app = Flask(__name__)
 
-# Configure camera
-
+##### Configure camera (Picamera): #####
 # camera = Picamera2()
 # camera.configure(camera.create_preview_configuration(raw={"size":(1640,1232)}, main={"format": 'RGB888', "size": (640, 480)}))
 # camera.start()
 
-# Temporary video substitute
-
-camera = cv2.VideoCapture(str(rel_path("./Testing/stockvideo2.mp4")))
+###### Configure camera(USB): ######
+camera = cv2.VideoCapture(0)
 
 # Initialize QR code detector
 detector = cv2.QRCodeDetector()
 
 # MediaMTX streaming function
-def generate_frames_mtx(fps=15, width=640, height=480):
-    ip = 'rtsp://192.168.1.211'
-    port = 8554
-    print("I'M RUNNING NOW")
+def generate_frames_mtx(fps=15, width=640, height=480, ip_add='127.0.0.1'):
     
     global qr_codes
+
+    #Low latency FFmpeg command
+    cmd = [
+        "ffmpeg",
+        "-fflags", "nobuffer", "-flags", "low_delay",
+        "-probesize", "32", "-analyzeduration", "0",
+        "-thread_queue_size", "512",
+        "-f", "v4l2",
+        "-input_format", "yuyv422",
+        "-video_size", f"{width}x{height}",
+        "-framerate", str(fps),
+        "-i", "/dev/video2",
+        "-an",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-tune", "zerolatency",
+        "-profile:v", "baseline",
+        "-pix_fmt", "yuv420p",
+        "-b:v", "2000k",
+        "-g", str(fps),
+        "-f", "rtsp",
+        "rtsp://" + ip_add + ":8554/LowLat"
+    ]
+    
+    #Run cmd in command line 
+    subprocess.Popen(cmd,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL, start_new_session=True)
 
     # Define the GStreamer pipeline
     out = cv2.VideoWriter('appsrc ! videoconvert' + \
         ' ! video/x-raw,format=I420' + \
         ' ! x264enc speed-preset=ultrafast bitrate=600 key-int-max=' + str(fps * 2) + \
         ' ! video/x-h264,profile=baseline' + \
-        f' ! rtspclientsink location={ip}:{port}/mystream',
+        ' ! rtspclientsink location=rtsp://' + ip_add + ':8554/QRDecode',
         cv2.CAP_GSTREAMER, 0, fps, (width, height), True)
     if not out.isOpened():
-        raise Exception(f"ERROR: Can't open video writer, {cv2.getBuildInformation()}")
-
-    frame_num = 0
+        raise OSError("can't open video writer")
 
     #Capture frame and look for QRs
     while True:
+        ### For picamera module: ###
         # frame = camera.capture_array()
-
-        camera.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-        res, frame = camera.read()
-        frame_num += 1
-
-        # Apply your OpenCV processing here
-        data, bbox, _ = detector.detectAndDecode(frame)
+        ### For USB camera: ###
+        _, frame = camera.read()
+        
+            # OpenCV QR code processing
+        try:
+            data, bbox, _ = detector.detectAndDecode(frame)
+        except:
+            print("An error occurred while decoding")
 
         if len(data)>0 and bbox is not None and len(bbox)>0:
             bbox = bbox.astype(int)
@@ -75,42 +92,18 @@ def generate_frames_mtx(fps=15, width=640, height=480):
         out.write(frame)
 
 
-# MJPEG streaming function (old)
-def generate_frames():
-    global qr_codes
-    while True:
-        frame = camera.capture_array()
-        
-        ###### QR Code Decoding #######
-        data, bbox, _ = detector.detectAndDecode(frame)
-
-        if len(data)>0 and bbox is not None and len(bbox)>0:
-            
-            bbox = bbox.astype(int)
-            print(data)
-
-            for i in range(len(bbox[0])):
-                cv2.line(frame, tuple(bbox[0][i]), tuple(bbox[0][(i+1) % 4]), (255, 0, 0), 2)
-
-            # Add new QR code data only if it's different from the last scanned
-            if data and (len(qr_codes) == 0 or data != qr_codes[-1]):
-                qr_codes.append(data)
-                print("QR Code Found:", data)
-        ###############################
-        
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
 @app.route('/')
 def index():
-    return render_template('index.html')
+    ip = [l for l in ([ip for ip in socket.gethostbyname_ex(socket.gethostname())[2] if not ip.startswith("127.")][:1], \
+        [[(s.connect(('8.8.8.8', 53)), s.getsockname()[0], s.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]]) if l][0][0]
+    path = ''
+    if scanQRevent.is_set():
+        print("Right syntax")
+        path = 'QRDecode'
+    else:
+        path = 'LowLat'
 
-# Enpoint for streaming MJPEG frames. Uncomment to use. 
-# @app.route('/video_feed')
-# def video_feed():
-#     return Response(generate_frames(), headers={"Cache-Control": "no-cache"}, mimetype='multipart/x-mixed-replace; boundary=frame')
+    return render_template('index.html', ip=ip, path=path)
 
 
 # SSE endpoint to stream new QR code events
@@ -147,28 +140,37 @@ def controller_control():
 
     print(f"Received R2 buttons: {R2buttons}")
 
-    return{}
+    return {}
 
+# Endpoint to handle automate toggle
+@app.route('/automate_toggle', methods=['POST'] )
+def automate_toggle():
+    data = request.get_json()
+    automate = data.get('automate')
+    print('Automate: ' + str(automate))
+    return {}
 
-
-def start_server(_host='0.0.0.0', _port=5000):
-    # Start generate_frames_mtx loop in a separate thread, since app.run() is blocking
-    threading.Thread(target=generate_frames_mtx, daemon=True).start()
-
-    #Start Flask app
-    app.run(host=_host, port=_port)
-
+# Endpoint to handle automate toggle
+@app.route('/QR_toggle', methods=['POST'] )
+def QR_toggle():
+    data = request.get_json()
+    scanQR = data.get('scanQR')
+    if scanQR:
+        scanQRevent.set()
+    else:
+        scanQRevent.clear()
+        
+    print('scanQR: ' + str(scanQR))
+    return {}
 
 # Or comment out below and use:
 # gunicorn -k gevent -w 1 app:app
 # In command line
-if __name__ == '__main__':
+def start_server(ip='0.0.0.0', port=5000):
     # Start generate_frames_mtx loop in a separate thread, since app.run() is blocking
     threading.Thread(target=generate_frames_mtx, daemon=True).start()
 
     #Start Flask app
-    app.run(host='0.0.0.0', port=5000)
-
-
-
+    app.run(host=ip, port=port)
+    
     

@@ -156,10 +156,6 @@ def main(args=None):
         rclpy.try_shutdown()
 
 
-if __name__ == "__main__":
-    main()
-
-
 # TODO: 
 #
 # - add code to deal with individual motors being disabled and the rest of the motors still running. 

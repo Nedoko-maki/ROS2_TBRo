@@ -426,5 +426,3 @@ def main(args=None):
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
         executor_thread.join()
 
-if __name__ == "__main__":
-    main()

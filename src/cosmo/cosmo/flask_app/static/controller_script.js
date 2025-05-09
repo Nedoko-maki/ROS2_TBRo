@@ -55,6 +55,7 @@ function handleSticks(axes) {
 }
 
 function updateStick(elementId, leftRightAxis, upDownAxis) {
+  // console.log(elementId);
   const multiplier = 25;
   const stickLeftRight = leftRightAxis * multiplier;
   const stickUpDown = upDownAxis * multiplier;

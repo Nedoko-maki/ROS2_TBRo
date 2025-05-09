@@ -35,7 +35,7 @@ class FlaskNode(Node):
         self.control_pub = self.create_publisher(msg_type=Image, topic="/flask/output/commands", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
 
-        flask_app.start_server()
+        # flask_app.start_server()
 
 
     def _control_callback(self, msg):
@@ -60,8 +60,3 @@ def main(args=None):
     finally:
         _flask_node.destroy_node()
         rclpy.try_shutdown()
-
-
-
-if __name__ == "__main__":
-    main()

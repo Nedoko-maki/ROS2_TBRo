@@ -155,7 +155,7 @@ class BatteryNode(Node):
         
         if debug:
             self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
-        rpio.logger = self.get_logger()
+        rpio.LOGGER = self.get_logger()
 
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
@@ -203,7 +203,7 @@ class BatteryNode(Node):
 
         msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 5 seconds."
         self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
-        self.get_logger().debug( f"FSTAT.DNR cleared.")
+        self.get_logger().debug(f"FSTAT.DNR cleared.")
 
         write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
         write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
@@ -215,7 +215,7 @@ class BatteryNode(Node):
         msg_2 = f"Timeout: the ModelCFG.Refresh bit (bit 15) confirming model loading was not cleared."
         self._wait(ModelCfg_Reg, 0x8000, msg_2) # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading.
 
-        self.get_logger().debug( f"ModelCFG loaded.")
+        self.get_logger().debug(f"ModelCFG loaded.")
 
         json_data = read_json()
 
@@ -227,7 +227,7 @@ class BatteryNode(Node):
 
         write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
 
-        self.get_logger().debug( "ENDING INIT CHIP")
+        self.get_logger().debug("ENDING INIT CHIP")
 
         self._timer.reset()
         self._save_charge.reset()
@@ -260,7 +260,7 @@ class BatteryNode(Node):
         :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
         :type timeout_seconds: int
         """
-        self.get_logger().debug( f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+        self.get_logger().debug(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
 
         timeout_count = 0
         while read_register(register) & bit_mask != 0:

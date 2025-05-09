@@ -31,7 +31,7 @@ nSLEEP  IN1 IN2 Description
 I2C_ADDRESS = 0x6C # address defined in the MAX17263 user guide. 'Look up slave address'. Could alternatively
         # be 0x36 for '7 MSb addresses', if 0x6C fails.  
 BUS = smbus.SMBus("/dev/i2c-1")  # the /dev/ bus number. Make sure the freq isn't faster than 400kHz.
-logger = None  # Will be set when BatteryNode initialises. 
+LOGGER = None  # Will be set when BatteryNode initialises. 
 
 # class DRV8701_Motor:
 
@@ -201,7 +201,7 @@ def read_register(register):  # uint8 register value
         :return: register's stored value.
         :rtype: int
         """
-        logger.debug( f"Reading register {hex(register)}")
+        LOGGER.debug( f"Reading register {hex(register)}")
         register_value = BUS.read_word_data(I2C_ADDRESS, register)
         return register_value
 
@@ -214,7 +214,7 @@ def write_register(register, value):  # uint8 reg, uint16 value
     :param value: word of data to be written.
     :type value: int
     """
-    logger.debug( f"Writing value {hex(value)} to register {hex(register)}")
+    LOGGER.debug( f"Writing value {hex(value)} to register {hex(register)}")
     BUS.write_word_data(I2C_ADDRESS, register, value)
 
 
@@ -278,6 +278,6 @@ def read_json(file="battery_parameters.json"):
         return json_data
     
     except FileNotFoundError:
-        logger.warn(f"FileNotFoundError: {file} was not found, falling back to default values.")
+        LOGGER.warn(f"FileNotFoundError: {file} was not found, falling back to default values.")
         return None
 

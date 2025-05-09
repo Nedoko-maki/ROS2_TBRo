@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from std_msgs.msg import Int16MultiArray, String
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
 
 QoS = QoSProfile(
@@ -38,7 +38,7 @@ class ControlNode(Node):
         self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 
         self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)
-        self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
+        self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
         self.battery_data = None
 

@@ -170,6 +170,10 @@ def get_pin(pin_number):
     return pins[pin_number]
 
 
+def write_register():
+    pass
+
+
 # PWMPin0 = HardwarePWM(pwm_channel=0, hz=0.1, chip=0)
 # PWMPin1 = HardwarePWM(pwm_channel=1, hz=0.2, chip=0)
 # PWMPin2 = HardwarePWM(pwm_channel=0, hz=0.3, chip=1)

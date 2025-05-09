@@ -1,4 +1,6 @@
 import rclpy
+import rclpy.executors
+import rclpy.logging
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
@@ -8,6 +10,8 @@ from sensor_msgs.msg import BatteryState
 import smbus3 as smbus
 from cosmo.rpio import InputPin, OutputPin, OutputPWMPin
 import json
+
+import threading 
 
 # EXTREMELY IMPORTANT LINKS FOR LOW LEVEL INTERACTIONS
 
@@ -146,14 +150,14 @@ class BatteryNode(Node):
 
     model_cfg = 0b1000010000000000  # refer to the ModelCFG page. Bit 10 and 15 are set (hopefully the correct endian)
 
-    def __init__(self, debugging_mode=False):  # initialising the ROS2 node
+    def __init__(self):  # initialising the ROS2 node
         super().__init__("battery_node")
 
         """
         Initialises timers, the subscriber and publisher for communication with the control node. Calls the _init_chip method to start the MAX17263. 
         """
-
-        self.debug = debugging_mode
+        
+        self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
 
         self.i2c_address = 0x6C # address defined in the user guide. 'Look up slave address'. Could alternatively
         # be 0x36 for '7 MSb addresses', if 0x6C fails.  
@@ -161,8 +165,8 @@ class BatteryNode(Node):
  
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
-        self._register_timeout = self.create_rate(1e3)  # for timeouts for verifying registers
-        self._timeout = self.create_rate(1e2)  # for timeouts for initialising the chip
+        # self._register_timeout = self.create_rate(1e3)  # for timeouts for verifying registers
+        # self._timeout = self.create_rate(1e2)  # for timeouts for initialising the chip
         self._save_charge = self.create_timer(10, self._save_params, autostart=False)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
         self._check_IC_reset  = self.create_timer(30, self._check_reset) # every 30s, check if the fuel gauge has been reset, and re-init if it has. 
 
@@ -174,23 +178,9 @@ class BatteryNode(Node):
         self._check_reset()
 
 
-    def _log(self, level, string):
-
-        logger = self.get_logger()
-
-        match level:
-            case "debug":
-                if self.debug:
-                    logger.debug(string)
-            case "info":
-                logger.info(string)
-            case "warn":
-                logger.warn(string)
-            case "error":
-                logger.error(string)
-            case "fault":
-                logger.fault(string)
-
+    def _add_sleep_node(self, node: Node):
+        self._sleep_node = node
+        self._rate = self._sleep_node.create_rate(1e2)
 
     def _check_reset(self):
         """Checks if a IC reset has occurred in the last 30 seconds.
@@ -198,7 +188,7 @@ class BatteryNode(Node):
         
         STATUS_POR_BIT = self._read_register(Status_Reg) & 0x0002
         
-        self._log("debug", f"STATUSREG = {bin(self._read_register(Status_Reg))}")
+        self.get_logger().debug( f"STATUSREG = {bin(self._read_register(Status_Reg))}")
 
         if STATUS_POR_BIT == 0: # check if the IC has been reset.
             self.get_battery_state()
@@ -213,7 +203,7 @@ class BatteryNode(Node):
         https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
         """
     
-        self._log("debug", "STARTING INIT CHIP")
+        self.get_logger().debug( "STARTING INIT CHIP")
 
         HibCFG = self._read_register(HibCfg_Reg)  # Store original HibCFG values
         self._write_register(Command_Reg, 0x90)  # exiting hibernate mode step 1
@@ -223,14 +213,14 @@ class BatteryNode(Node):
         msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 5 seconds."
         self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
         
-        self._log("debug", f"FSTAT.DNR cleared.")
+        self.get_logger().debug( f"FSTAT.DNR cleared.")
 
         self._write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
         self._write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
         self._write_register(VEmpty_Reg, self.battery_params["VEmpty"])
         self._write_register(FullSOCThr_Reg, self.battery_params["FullSOCThr"])
 
-        self._log("debug", f"test breakpoint 1.")
+        self.get_logger().debug( f"test breakpoint 1.")
 
         self._write_register(Config_Reg, self._read_register(Config_Reg) | 0x8000)  # Setting TSEL to 1 for external NTC. Might need to be placed elsewhere in case it breaks something.
         self._write_register(ModelCfg_Reg, self.model_cfg)  # Set the ModelCfg register
@@ -238,7 +228,7 @@ class BatteryNode(Node):
         msg_2 = f"Timeout: the ModelCFG.Refresh bit (bit 15) confirming model loading was not cleared."
         self._wait(ModelCfg_Reg, 0x8000, msg_2) # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading.
 
-        self._log("debug", f"ModelCFG loaded.")
+        self.get_logger().debug( f"ModelCFG loaded.")
 
         json_data = self._read_json()
 
@@ -256,7 +246,7 @@ class BatteryNode(Node):
 
         self._write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
 
-        self._log("debug", "ENDING INIT CHIP")
+        self.get_logger().debug( "ENDING INIT CHIP")
 
         self._timer.reset()
         self._save_charge.reset()
@@ -310,7 +300,7 @@ class BatteryNode(Node):
             return json_data
         
         except FileNotFoundError:
-            self._log("error", f"FileNotFoundError: {file} was not found, falling back to default values.")
+            self.get_logger().error(f"FileNotFoundError: {file} was not found, falling back to default values.")
             return None
         
     def _wait(self, register, bit_mask, error_msg, timeout_seconds=5):
@@ -326,21 +316,22 @@ class BatteryNode(Node):
         :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
         :type timeout_seconds: int
         """
-        self._log("debug", f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+        self.get_logger().debug( f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
 
         # I feel like by all means this shouldn't block the entire thread and die a horrible static death, 
         # but here we are.
 
-        # Rate is a Timer in a wrapper with preset params by rclpy. 
+        # Rate is a Timer in a wrapper with preset params by rclpy.   
 
-        _timeout_count = 0
+        timeout_count = 0
         while self._read_register(register) & bit_mask != 0:
-            self._timeout.sleep()
-            _timeout_count += 1
-            self._log("debug", f"timeout count: {_timeout_count}")
-            if _timeout_count * 1e-2 > timeout_seconds:
+            self._rate.sleep()
+            timeout_count += 1
+            self.get_logger().debug(f"timeout count: {timeout_count}")
+            if timeout_count * 1e-2 > timeout_seconds:
                 self.get_logger().error(error_msg)
                 break
+
 
     def _read_register(self, register):  # uint8 register value
 
@@ -351,7 +342,7 @@ class BatteryNode(Node):
         :return: register's stored value.
         :rtype: int
         """
-        self._log("debug", f"Reading register {hex(register)}")
+        self.get_logger().debug( f"Reading register {hex(register)}")
         register_value = self.bus.read_word_data(self.i2c_address, register)
         return register_value
 
@@ -364,7 +355,7 @@ class BatteryNode(Node):
         :param value: word of data to be written.
         :type value: int
         """
-        self._log("debug", f"Writing value {hex(value)} to register {hex(register)}")
+        self.get_logger().debug( f"Writing value {hex(value)} to register {hex(register)}")
         self.bus.write_word_data(self.i2c_address, register, value)
 
 
@@ -499,7 +490,7 @@ class BatteryNode(Node):
                 return (5.625 * level)
 
             case "Special":
-                self._log("info", "Should implement manually.")
+                self.get_logger().warn("Should implement manually.")
                 
 
     def get_battery_state(self):
@@ -522,15 +513,32 @@ class BatteryNode(Node):
         self.state["BatteryPresent"] = bool(self._read_register(Status_Reg) & 0b1000) # bit[3] of the Status Register is the Bst bit. 
         
         if self._read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
-            self._log("error", "Critical Error: Battery has been removed!") 
+            self.get_logger().error("Critical Error: Battery has been removed!") 
+
+    
+    def __del__(self):
+        self._sleep_node.destroy_node()
+        self._sleep_thread.join()
+
+
 
 def main(args=None):
     rclpy.init(args=args)
-    _battery_node = BatteryNode(debugging_mode=True)
-    rclpy.spin(_battery_node)
-    _battery_node.destroy_node()
-    rclpy.shutdown()
+    _battery_node = BatteryNode()
+    _sleep_node = rclpy.create_node("sleep_node")
+    _battery_node._add_sleep_node(_sleep_node)
+    
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(_battery_node)
+    executor.add_node(_sleep_node)
 
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
+    # rclpy.spin(_battery_node)
+    # _battery_node.destroy_node()
+    rclpy.shutdown()
+    executor_thread.join()
 
 if __name__ == "__main__":
     main()

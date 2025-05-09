@@ -9,8 +9,6 @@ from sensor_msgs.msg import BatteryState
 
 import cosmo.rpio as rpio
 from cosmo.rpio import hex_to_dec, write_register, read_register
-import json
-
 import threading 
 
 # EXTREMELY IMPORTANT LINKS FOR LOW LEVEL INTERACTIONS
@@ -143,20 +141,19 @@ class BatteryNode(Node):
 
     model_cfg = 0b1000010000000000  # refer to the ModelCFG page. Bit 10 and 15 are set (hopefully the correct endian)
 
-    def __init__(self):  # initialising the ROS2 node
+    def __init__(self, debug=False):  # initialising the ROS2 node
         super().__init__("battery_node")
 
         """
         Initialises timers, the subscriber and publisher for communication with the control node. Calls the _init_chip method to start the MAX17263. 
         """
         
-        self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
+        if debug:
+            self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
         rpio.logger = self.get_logger()
 
         timer_frequency = 0.5 # frequency of battery updates (Hz)
         self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
-        # self._register_timeout = self.create_rate(1e3)  # for timeouts for verifying registers
-        # self._timeout = self.create_rate(1e2)  # for timeouts for initialising the chip
         self._save_charge = self.create_timer(10, self._save_params, autostart=False)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
         self._check_IC_reset  = self.create_timer(10, self._check_reset) # every 10s, check if the fuel gauge has been reset, and re-init if it has. 
 
@@ -399,10 +396,6 @@ class BatteryNode(Node):
         if read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
             self.get_logger().error("Critical Error: Battery has been removed!") 
 
-    
-    def __del__(self):
-        self._sleep_node.destroy_node()
-
 
 def main(args=None):
     rclpy.init(args=args)
@@ -420,13 +413,13 @@ def main(args=None):
     try:  # blocking operation to make sure the script doesn't leave early and end rclpy.
         while rclpy.ok():
             pass
-    except KeyboardInterrupt as err:
-        _battery_node.get_logger().warn(f"{err}: KeyboardInterrupt triggered.")
-
-    # rclpy.spin(_battery_node)
-    # _battery_node.destroy_node()
-    rclpy.shutdown()
-    executor_thread.join()
+    except KeyboardInterrupt:
+        _battery_node.get_logger().warn(f"KeyboardInterrupt triggered.")
+    finally:
+        _sleep_node.destroy_node()
+        _battery_node.destroy_node()
+        rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
+        executor_thread.join()
 
 if __name__ == "__main__":
     main()

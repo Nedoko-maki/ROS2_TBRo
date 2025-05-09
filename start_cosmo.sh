@@ -16,6 +16,7 @@ if [ ! -d ./launch ]; then
 	exit 2
 fi
 
+export RCUTILS_COLORIZED_OUTPUT=1
 echo "Located /install and /launch."
 source ./install/local_setup.bash
 . ./venv/bin/activate

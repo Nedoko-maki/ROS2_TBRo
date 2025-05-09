@@ -28,10 +28,10 @@ nSLEEP  IN1 IN2 Description
 """
 
 
-I2C_ADDRESS = 0x6C # address defined in the user guide. 'Look up slave address'. Could alternatively
+I2C_ADDRESS = 0x6C # address defined in the MAX17263 user guide. 'Look up slave address'. Could alternatively
         # be 0x36 for '7 MSb addresses', if 0x6C fails.  
 BUS = smbus.SMBus("/dev/i2c-1")  # the /dev/ bus number. Make sure the freq isn't faster than 400kHz.
-logger = None
+logger = None  # Will be set when BatteryNode initialises. 
 
 # class DRV8701_Motor:
 
@@ -141,6 +141,10 @@ logger = None
 #         self.forward_pin.stop()
 #         self.backward_pin.stop()
 
+# If lgpio gives an error about the GPIO being busy, try closing VSCode to release any active terminals. 
+# Check with sudo gpioinfo to see if any pins are being occupied by a program that isn't meant to be using
+# them.
+
 
 class DRV8701_Motor_LGPIO(Motor):
     def __init__(self, forward, backward, *, enable=None, pwm=True, pin_factory=None, pwm_frequency=None):
@@ -165,6 +169,10 @@ class DRV8701_Motor_LGPIO(Motor):
         """
         self.forward_device.off()  
         self.backward_device.off()
+    
+    def __del__(self):
+        self.forward_device.close()
+        self.backward_device.close()
 
 
 def set_pin(pin_number, pin_type, **kwargs):

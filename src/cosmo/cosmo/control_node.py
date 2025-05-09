@@ -84,18 +84,16 @@ class ControlNode(Node):
             self.motor_pub.publish(msg)
 
 
-
-
-
-
-
 def main(args=None):
     rclpy.init(args=args)
     _cosmo_node = ControlNode()
-    rclpy.spin(_cosmo_node)
-    _cosmo_node.destroy_node()
-    rclpy.shutdown()
-
-
+    try:
+        rclpy.spin(_cosmo_node)
+    except KeyboardInterrupt:
+        _cosmo_node.get_logger().warn(f"KeyboardInterrupt triggered.")
+    finally:
+        _cosmo_node.destroy_node()
+        rclpy.try_shutdown()
+    
 if __name__ == "__main__":
     main()

@@ -66,10 +66,13 @@ class ModelNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     __model_node = ModelNode()
-    rclpy.spin(__model_node)
-    __model_node.destroy_node()
-    rclpy.shutdown()
-
+    try:
+        rclpy.spin(__model_node)
+    except KeyboardInterrupt:
+        __model_node.get_logger().warn(f"KeyboardInterrupt triggered.")
+    finally:
+        __model_node.destroy_node()
+        rclpy.try_shutdown()
 
 if __name__ == "__main__":
     main()

@@ -147,9 +147,13 @@ class MotorDriverNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     _motor_node = MotorDriverNode()
-    rclpy.spin(_motor_node)
-    _motor_node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(_motor_node)
+    except KeyboardInterrupt:
+        _motor_node.get_logger().warn(f"KeyboardInterrupt triggered.")
+    finally:
+        _motor_node.destroy_node()
+        rclpy.try_shutdown()
 
 
 if __name__ == "__main__":

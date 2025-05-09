@@ -52,10 +52,15 @@ class FlaskNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    __flask_node = FlaskNode()
-    rclpy.spin(__flask_node)
-    __flask_node.destroy_node()
-    rclpy.shutdown()
+    _flask_node = FlaskNode()
+    try:
+        rclpy.spin(_flask_node)
+    except KeyboardInterrupt:
+        _flask_node.get_logger().warn(f"KeyboardInterrupt triggered.")
+    finally:
+        _flask_node.destroy_node()
+        rclpy.try_shutdown()
+
 
 
 if __name__ == "__main__":

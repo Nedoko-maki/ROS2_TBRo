@@ -8,7 +8,12 @@ from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import BatteryState
 
 import cosmo.rpio as rpio
-from cosmo.rpio import hex_to_dec, write_register, read_register
+from cosmo.rpio import (hex_to_dec, 
+                        write_register, 
+                        read_register, 
+                        write_json,
+                        read_json, 
+                        )
 import threading 
 
 # EXTREMELY IMPORTANT LINKS FOR LOW LEVEL INTERACTIONS
@@ -212,7 +217,7 @@ class BatteryNode(Node):
 
         self.get_logger().debug( f"ModelCFG loaded.")
 
-        json_data = self._read_json()
+        json_data = read_json()
 
         if json_data: # if the return value is not None, write to registers. 
             write_register(RComp0_Reg, hex_to_dec(json_data["RComp0"]))
@@ -287,7 +292,7 @@ class BatteryNode(Node):
             "FullCapNom": hex(SAVED_FullCapNom)
                      }
         
-        self._write_json(json_data)
+        write_json(json_data)
 
 
     def _battery_callback(self, msg):

@@ -50,10 +50,13 @@ class ModelNode(Node):
         # import cosmo.model.test_simple as model_test
         # model_test.test_simple()
 
+        # Maybe it is a good idea to run this in a separate thread? 
+
 
     def _model_callback(self, msg):
-        pass
-
+        cv_image = self._convert_cv2_to_imgmsg(msg)
+        # cmap = model.infer(cv_image)
+        # 
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")

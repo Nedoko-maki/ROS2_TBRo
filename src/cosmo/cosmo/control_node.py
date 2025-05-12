@@ -42,21 +42,25 @@ class ControlNode(Node):
 
         self.battery_data = None
 
-        self.test_timer = self.create_rate(0.2, self.get_clock())
-        self.test_motors()  ## some test code 
+        self.test_timer = self.create_timer(1/10, callback=self.test_motors)
+        self._send_to_flask_timer = self.create_timer(1, callback=self._send_data_to_flask)
+        # self.test_motors()  ## some test code 
+
+    def _send_data_to_flask(self):
+        ...
 
     def _motor_callback(self, msg):
-        pass
+        pass  # receive data from motors
 
     def _flask_callback(self, msg):
-        pass
+        pass  # receieve commands from the flask app
 
     def _battery_callback(self, msg):
         self.battery_data = msg  # need to review the msg source code to find out how to unpack values quickly rather than do it line by line. 
         # if it comes to it I can use getattr(), but it's not very pythonic...
 
     def _model_callback(self, msg):
-        pass
+        pass  # receive ML-processed images from the model 
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")

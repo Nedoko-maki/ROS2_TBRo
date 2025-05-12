@@ -2,6 +2,6 @@ log/
 install/
 build/
 src/ai_model_node/ai_model_node/model_data/
-src/cosmo/cosmo/battery_node.py
+src/cosmo/cosmo/camera_node.py
 launch/__pycache__/
 venv/

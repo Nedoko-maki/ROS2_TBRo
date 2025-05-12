@@ -426,3 +426,9 @@ def main(args=None):
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
         executor_thread.join()
 
+# TODO:
+# - self regulation of battery state (safety precautions, e.g. if something has gone horribly wrong try
+# to fix the problem or prevent an accident)
+# - notification of a problem to the base station
+# - communication of actions to take? (I don't think I can do anything with the MAX chip to switch it off?)
+# - check there is anything I can do via registers to alter the chip's behaviour

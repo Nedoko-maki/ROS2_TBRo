@@ -1,7 +1,8 @@
 import gpiozero as gpio
 import smbus3 as smbus
 import json
-# This is meant to be a container for all the pins that can be accessed by any relevant module. 
+
+# This is meant to be a container for all the IO/pins that can be accessed by any relevant module. 
 #
 # Import rpio and call either set_pin with the pin number, pin base type (gpiozero docs), and the kwargs for the base type.
 # Uses gpiozero classes so look at the documentation there for the parameters and methods! 
@@ -16,7 +17,7 @@ OutputPin = gpio.DigitalOutputDevice
 OutputPWMPin = gpio.PWMOutputDevice
 Motor = gpio.Motor
 
-"""
+DRV_CONTROL_INPUTS_HELP="""
 DRV8701P (PWM) Control Interface   
 
 nSLEEP  IN1 IN2 Description

@@ -24,12 +24,13 @@ QoS = QoSProfile(
 )
 
 sleep_node = None
+node_create_event = threading.Event()
 
 class ControlNode(Node):
 
     bridge = CvBridge()
 
-    def __init__(self):
+    def __init__(self, sleep_node):
         super().__init__("control_node")
 
         self.motor_pub = self.create_publisher(msg_type=String, topic="/motor_driver/input", qos_profile=QoS)
@@ -45,7 +46,9 @@ class ControlNode(Node):
 
         self.battery_data = None
 
-        self.test_timer = self.create_timer(1/10, callback=self.test_motors)
+        self.test_timer = self.create_timer(20, callback=self.test_motors)
+        self.test_rate = sleep_node.create_rate(4)
+
         self._send_to_flask_timer = self.create_timer(1, callback=self._send_data_to_flask)
         # self.test_motors()  ## some test code 
 
@@ -87,17 +90,19 @@ class ControlNode(Node):
         for cmd in test_commands:
             msg = String()
             msg.data = cmd
-            self.test_timer.sleep()
+            self.test_rate.sleep()
             self.motor_pub.publish(msg)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    _cosmo_node = ControlNode()
+    
 
     global sleep_node
     sleep_node = rclpy.create_node("sleep_node")  # There is a possibility that this being accessed by
     # different nodes could cause major problems. 
+
+    _cosmo_node = ControlNode(sleep_node=sleep_node)
 
     executor = rclpy.executors.MultiThreadedExecutor()
     executor.add_node(_cosmo_node)

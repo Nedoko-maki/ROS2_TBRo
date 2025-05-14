@@ -116,6 +116,8 @@ class MotorDriverNode(Node):
         else:
             command = msg.data
 
+        self.get_logger().debug(f"command is {msg.data}")
+
         match command:    
             case "forward":
 

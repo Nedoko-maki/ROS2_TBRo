@@ -7,7 +7,6 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import BatteryState
 
-from cosmo.control_node import sleep_node
 import cosmo.rpio as rpio
 from cosmo.rpio import (hex_to_dec, 
                         write_register, 
@@ -32,8 +31,6 @@ QoS = QoSProfile(
     # but lose them if the network isn't robust
     durability=DurabilityPolicy.VOLATILE, # no attempt to persist samples. 
 )
-
- 
 
 # Might be a good idea to change the QoS settings for battery data. (Important to keep all data? Make sure all all data is received?)
 
@@ -172,7 +169,7 @@ class BatteryNode(Node):
         self._is_address()  # check that i2c address 0x6c is connected and readable. 
         # self._check_reset()
 
-    def add_sleep_node(self, node: Node):
+    def _add_sleep_node(self, node: Node):
         self.get_logger().debug("adding sleep node")
         self._sleep_node = node
         self._rate = self._sleep_node.create_rate(1e2)
@@ -266,10 +263,13 @@ class BatteryNode(Node):
         self.get_logger().debug(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
 
         timeout_count = 0
-        while read_register(register) & bit_mask != 0:
+        while read_register(register, debug=False) & bit_mask != 0:
             self._rate.sleep() # sleeps for 10ms
             timeout_count += 1
-            self.get_logger().debug(f"timeout count: {timeout_count}")
+            
+            if timeout_count % 10 == 0:
+                self.get_logger().debug(f"timeout count: {timeout_count}")
+
             if timeout_count * 1e-2 > timeout_seconds: 
                 self.get_logger().error(error_msg)
                 break
@@ -408,19 +408,24 @@ class BatteryNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     _battery_node = BatteryNode()
-    _battery_node.add_sleep_node(sleep_node)
+    _sleep_node = rclpy.create_node("sleep_node")
+    _battery_node._add_sleep_node(_sleep_node)
+    
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(_battery_node)
+    executor.add_node(_sleep_node)
+
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
 
     try:  # blocking operation to make sure the script doesn't leave early and end rclpy.
-        rclpy.spin(_battery_node)
+        while rclpy.ok():
+            pass
     except KeyboardInterrupt:
         _battery_node.get_logger().warn(f"KeyboardInterrupt triggered.")
     finally:
+        _sleep_node.destroy_node()
         _battery_node.destroy_node()
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
+        executor_thread.join()
 
-# TODO:
-# - self regulation of battery state (safety precautions, e.g. if something has gone horribly wrong try
-# to fix the problem or prevent an accident)
-# - notification of a problem to the base station
-# - communication of actions to take? (I don't think I can do anything with the MAX chip to switch it off?)
-# - check there is anything I can do via registers to alter the chip's behaviour

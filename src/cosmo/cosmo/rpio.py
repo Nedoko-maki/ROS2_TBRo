@@ -193,7 +193,7 @@ def get_pin(pin_number):
 #                           BatteryNode IO below
 # ========================================================================
 
-def read_register(register):  # uint8 register value
+def read_register(register, debug=True):  # uint8 register value
 
         """Read a register.
 
@@ -202,12 +202,14 @@ def read_register(register):  # uint8 register value
         :return: register's stored value.
         :rtype: int
         """
-        LOGGER.debug( f"Reading register {hex(register)}")
+        if debug: 
+            LOGGER.debug( f"Reading register {hex(register)}")
+
         register_value = BUS.read_word_data(I2C_ADDRESS, register)
         return register_value
 
 
-def write_register(register, value):  # uint8 reg, uint16 value
+def write_register(register, value, debug=True):  # uint8 reg, uint16 value
     """Write to a register.
 
     :param register: register to be written to.
@@ -215,7 +217,9 @@ def write_register(register, value):  # uint8 reg, uint16 value
     :param value: word of data to be written.
     :type value: int
     """
-    LOGGER.debug( f"Writing value {hex(value)} to register {hex(register)}")
+    if debug: 
+        LOGGER.debug( f"Writing value {hex(value)} to register {hex(register)}")
+
     BUS.write_word_data(I2C_ADDRESS, register, value)
 
 

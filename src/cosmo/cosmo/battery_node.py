@@ -157,10 +157,13 @@ class BatteryNode(Node):
             self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
         rpio.LOGGER = self.get_logger()
 
-        timer_frequency = 0.5 # frequency of battery updates (Hz)
-        self._timer = self.create_timer(1/timer_frequency, self.get_battery_state, autostart=False)  # for updating the battery status  
-        self._save_charge = self.create_timer(10, self._save_params, autostart=False)  # every 10s, check bit 6 of the Cycles register to save charge parameters. 
-        self._check_IC_reset  = self.create_timer(10, self._check_reset) # every 10s, check if the fuel gauge has been reset, and re-init if it has. 
+        battery_update_period = 0.5  # period for sending the battery metrics to control node
+        save_params_period = 10  # check to save the battery metrics
+        check_reset_period = 4  # check if the IC has reset
+
+        self._timer = self.create_timer(battery_update_period, self.get_battery_state, autostart=False)  # for updating the battery status  
+        self._save_charge = self.create_timer(save_params_period, self._save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
+        self._check_IC_reset  = self.create_timer(check_reset_period, self._check_reset) # check if the fuel gauge has been reset, and re-init if it has. 
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
@@ -169,7 +172,8 @@ class BatteryNode(Node):
         self._is_address()  # check that i2c address 0x6c is connected and readable. 
         # self._check_reset()
 
-    def _add_sleep_node(self, node: Node):
+    def _add_sleep_node(self, node: Node):  # I hate how this is implemented, but for some reason this is called
+        # AFTER it wants the sleep node, it breaks. If I add it beforehand it's not spun so it just blocks forever.
         self.get_logger().debug("adding sleep node")
         self._sleep_node = node
         self._rate = self._sleep_node.create_rate(1e2)
@@ -317,7 +321,7 @@ class BatteryNode(Node):
         msg.current = self._conv(self.state["AvgCurrent"], "Current") # discharge current, negative when discharging. 
         msg.charge = self._conv(self.state["RepCap"], "Capacity") # charge in Ah.
         msg.capacity = self._conv(self.state["FullCapRep"], "Capacity")  # capacity in Ah. 
-        msg.design_charge = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
+        msg.design_capacity = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
 
         # Power supply status (find in the ros2 docs):
         # 0 = UNKNOWN

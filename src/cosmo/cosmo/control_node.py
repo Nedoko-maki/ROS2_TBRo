@@ -38,7 +38,9 @@ class ControlNode(Node):
 
         self.model_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/model/output", qos_profile=QoS, callback=self._model_callback)
         
-        self.flask_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/flask/input", qos_profile=QoS)
+        self.flask_battery_pub = self.create_publisher(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS)
+        self.flask_motor_pub = self.create_publisher(msg_type=String, topic="/flask/input/motor", qos_profile=QoS)
+        
         self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 
         self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)
@@ -49,11 +51,11 @@ class ControlNode(Node):
         self.test_timer = self.create_timer(20, callback=self.test_motors)
         self.test_rate = sleep_node.create_rate(4)
 
-        self._send_to_flask_timer = self.create_timer(1, callback=self._send_data_to_flask)
+        self._send_to_flask_timer = self.create_timer(1, callback=self._send_battery_data_to_flask)
         # self.test_motors()  ## some test code 
 
-    def _send_data_to_flask(self):
-        ...
+    def _send_battery_data_to_flask(self):
+        self.flask_battery_pub.publish(self.battery_data)
 
     def _motor_callback(self, msg):
         pass  # receive data from motors
@@ -62,8 +64,15 @@ class ControlNode(Node):
         pass  # receieve commands from the flask app
 
     def _battery_callback(self, msg):
-        self.battery_data = msg  # need to review the msg source code to find out how to unpack values quickly rather than do it line by line. 
-        # if it comes to it I can use getattr(), but it's not very pythonic...
+        # self.battery_data = {  # technically I'm creating a new dict every time this runs?
+            # "voltage": msg.voltage,  # voltage
+            # "percentage": msg.percentage,  # charge percentage normalised from 0 to 1
+            # "current": msg.current,  # discharge current, negative when discharging. 
+            # "charge": msg.charge,  # charge in Ah.
+            # "capacity": msg.capacity,  # capacity in Ah. 
+            # "design_capacity": msg.design_capacity  # Design capacity                 
+                            #  }   
+        self.battery_data = msg
 
     def _model_callback(self, msg):
         pass  # receive ML-processed images from the model 

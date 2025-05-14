@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from std_msgs.msg import String
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
 import cv2
 
@@ -36,8 +36,9 @@ class FlaskNode(Node):
 
         self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
         self.control_pub = self.create_publisher(msg_type=String, topic="/flask/output/commands", qos_profile=QoS)
-        self.control_sub = self.create_subscription(msg_type=String, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
-        
+        self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS, callback=self._battery_callback)
+        self.motor_sub = self.create_subscription(msg_type=String, topic="/flask/input/battery", qos_profile=QoS, callback=self._motor_callback)
+
         self.metrics = None
                 
         # self.command_queue = Queue() # pass this into the server so it can send back data...
@@ -56,15 +57,18 @@ class FlaskNode(Node):
         msg.data = command
         self.control_pub.publish(msg)
 
-    def _control_callback(self, msg):
+    def _get_data(self):
+        return self.metrics
+    
+    def _battery_callback(self, msg):
         # send back relevant data metrics from battery, motor, temps, etc. 
         # assign data values from the ros2 message into a dict or something to store data
         # there will be another function for the flask server to call to retrieve these values
         # self.metrics = None
         pass
 
-    def _get_data(self):
-        return self.metrics
+    def _motor_callback(self, msg):
+        pass
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")

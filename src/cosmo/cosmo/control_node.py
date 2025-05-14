@@ -6,6 +6,8 @@ from std_msgs.msg import Int16MultiArray, String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+import threading 
+
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
     depth=10,  # Queue size of 10
@@ -21,6 +23,7 @@ QoS = QoSProfile(
     # QoSProfile source code for kwargs and what they do
 )
 
+sleep_node = None
 
 class ControlNode(Node):
 
@@ -91,13 +94,28 @@ class ControlNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     _cosmo_node = ControlNode()
+
+    global sleep_node
+    sleep_node = rclpy.create_node("sleep_node")  # There is a possibility that this being accessed by
+    # different nodes could cause major problems. 
+
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(_cosmo_node)
+    executor.add_node(sleep_node)
+
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
     try:
-        rclpy.spin(_cosmo_node)
+        while rclpy.ok():
+            pass
     except KeyboardInterrupt:
         _cosmo_node.get_logger().warn(f"KeyboardInterrupt triggered.")
     finally:
+        sleep_node.destroy_node()
         _cosmo_node.destroy_node()
-        rclpy.try_shutdown()
+        rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
+        executor_thread.join()
     
 if __name__ == "__main__":
     main()

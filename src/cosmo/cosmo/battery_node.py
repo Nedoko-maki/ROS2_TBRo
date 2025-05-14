@@ -7,7 +7,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import BatteryState
 
-
+from cosmo.control_node import sleep_node
 import cosmo.rpio as rpio
 from cosmo.rpio import (hex_to_dec, 
                         write_register, 
@@ -33,8 +33,7 @@ QoS = QoSProfile(
     durability=DurabilityPolicy.VOLATILE, # no attempt to persist samples. 
 )
 
-sleep_node = None # so the other modules can take the sleep node from here. Not sure if this thing functions with it elsewhere, we 
-# can experiment later 
+ 
 
 # Might be a good idea to change the QoS settings for battery data. (Important to keep all data? Make sure all all data is received?)
 
@@ -409,29 +408,15 @@ class BatteryNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     _battery_node = BatteryNode()
-    _sleep_node = rclpy.create_node("sleep_node")
-    _battery_node.add_sleep_node(_sleep_node)
-
-    global sleep_node  # I dislike this but I'm not entirely sure where else I'd do this 
-    sleep_node = _sleep_node
-
-    executor = rclpy.executors.MultiThreadedExecutor()
-    executor.add_node(_battery_node)
-    executor.add_node(_sleep_node)
-
-    executor_thread = threading.Thread(target=executor.spin, daemon=True)
-    executor_thread.start()
+    _battery_node.add_sleep_node(sleep_node)
 
     try:  # blocking operation to make sure the script doesn't leave early and end rclpy.
-        while rclpy.ok():
-            pass
+        rclpy.spin(_battery_node)
     except KeyboardInterrupt:
         _battery_node.get_logger().warn(f"KeyboardInterrupt triggered.")
     finally:
-        _sleep_node.destroy_node()
         _battery_node.destroy_node()
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
-        executor_thread.join()
 
 # TODO:
 # - self regulation of battery state (safety precautions, e.g. if something has gone horribly wrong try

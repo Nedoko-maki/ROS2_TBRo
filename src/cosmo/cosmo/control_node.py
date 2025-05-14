@@ -6,6 +6,8 @@ from std_msgs.msg import Int16MultiArray, String
 from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
 
+import threading 
+
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
     depth=10,  # Queue size of 10
@@ -21,6 +23,7 @@ QoS = QoSProfile(
     # QoSProfile source code for kwargs and what they do
 )
 
+sleep_node = None
 
 class ControlNode(Node):
 
@@ -42,21 +45,25 @@ class ControlNode(Node):
 
         self.battery_data = None
 
-        self.test_timer = self.create_rate(0.2, self.get_clock())
-        self.test_motors()  ## some test code 
+        self.test_timer = self.create_timer(1/10, callback=self.test_motors)
+        self._send_to_flask_timer = self.create_timer(1, callback=self._send_data_to_flask)
+        # self.test_motors()  ## some test code 
+
+    def _send_data_to_flask(self):
+        ...
 
     def _motor_callback(self, msg):
-        pass
+        pass  # receive data from motors
 
     def _flask_callback(self, msg):
-        pass
+        pass  # receieve commands from the flask app
 
     def _battery_callback(self, msg):
         self.battery_data = msg  # need to review the msg source code to find out how to unpack values quickly rather than do it line by line. 
         # if it comes to it I can use getattr(), but it's not very pythonic...
 
     def _model_callback(self, msg):
-        pass
+        pass  # receive ML-processed images from the model 
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")
@@ -87,13 +94,28 @@ class ControlNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     _cosmo_node = ControlNode()
+
+    global sleep_node
+    sleep_node = rclpy.create_node("sleep_node")  # There is a possibility that this being accessed by
+    # different nodes could cause major problems. 
+
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(_cosmo_node)
+    executor.add_node(sleep_node)
+
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
     try:
-        rclpy.spin(_cosmo_node)
+        while rclpy.ok():
+            pass
     except KeyboardInterrupt:
         _cosmo_node.get_logger().warn(f"KeyboardInterrupt triggered.")
     finally:
+        sleep_node.destroy_node()
         _cosmo_node.destroy_node()
-        rclpy.try_shutdown()
+        rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
+        executor_thread.join()
     
 if __name__ == "__main__":
     main()

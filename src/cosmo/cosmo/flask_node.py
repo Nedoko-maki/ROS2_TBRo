@@ -2,9 +2,12 @@ import rclpy
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
-from std_msgs.msg import Int16MultiArray
+from std_msgs.msg import String
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+import cv2
+
+from queue import Queue
 
 import cosmo.flask_app.app as flask_app
 
@@ -32,15 +35,36 @@ class FlaskNode(Node):
         super().__init__("flask_node")
 
         self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
-        self.control_pub = self.create_publisher(msg_type=Image, topic="/flask/output/commands", qos_profile=QoS)
-        self.control_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
+        self.control_pub = self.create_publisher(msg_type=String, topic="/flask/output/commands", qos_profile=QoS)
+        self.control_sub = self.create_subscription(msg_type=String, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
+        
+        self.metrics = None
+                
+        # self.command_queue = Queue() # pass this into the server so it can send back data...
+        # # Can we send a function/method instead to run to pass back data?
+        # self.image_queue = Queue()
 
-        # flask_app.start_server()
+        # self.poll_timer = self.create_timer(period, callback=self._poll_commands)
 
+        # url = 
+        # flask_app.start_server(receive_callback=_receive_command, send_callback=_get_data)
+        # self.vcap = cv2.VideoCapture(url)
+
+    def _receive_command(self, command):
+        # receive commands from the flask app and publish to the /flask/output/commands topic
+        msg = String()
+        msg.data = command
+        self.control_pub.publish(msg)
 
     def _control_callback(self, msg):
+        # send back relevant data metrics from battery, motor, temps, etc. 
+        # assign data values from the ros2 message into a dict or something to store data
+        # there will be another function for the flask server to call to retrieve these values
+        # self.metrics = None
         pass
 
+    def _get_data(self):
+        return self.metrics
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")

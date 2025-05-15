@@ -40,7 +40,7 @@ class ControlNode(Node):
         
         self.flask_battery_pub = self.create_publisher(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS)
         self.flask_motor_pub = self.create_publisher(msg_type=String, topic="/flask/input/motor", qos_profile=QoS)
-        
+
         self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 
         self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)

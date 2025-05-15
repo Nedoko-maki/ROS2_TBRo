@@ -157,6 +157,9 @@ class BatteryNode(Node):
             self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
         rpio.LOGGER = self.get_logger()
 
+        self.ALRT_OUT_PIN = rpio.set_pin(4, rpio.OutputPin) # GPIO4
+        self.ALRT_OUT_PIN.when_deactivated = self._alert_pin_triggered
+
         battery_update_period = 0.5  # period for sending the battery metrics to control node
         save_params_period = 10  # check to save the battery metrics
         check_reset_period = 4  # check if the IC has reset
@@ -172,11 +175,51 @@ class BatteryNode(Node):
         self._is_address()  # check that i2c address 0x6c is connected and readable. 
         # self._check_reset()
 
-    def _add_sleep_node(self, node: Node):  # I hate how this is implemented, but for some reason this is called
-        # AFTER it wants the sleep node, it breaks. If I add it beforehand it's not spun so it just blocks forever.
-        self.get_logger().debug("adding sleep node")
-        self._sleep_node = node
-        self._rate = self._sleep_node.create_rate(1e2)
+    def _is_address(self):
+        """Checks if an i2c address exists.
+
+        :return: bool
+        :rtype: bool
+        """
+
+        try: 
+            _ = read_register(Status_Reg)
+        except OSError as e:
+            self.get_logger().error(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")
+            raise OSError
+        
+        return True
+        
+    def _wait(self, register, bit_mask, error_msg, timeout_seconds=2):
+
+        """ Waits for a bit or a set of bits to be toggled.
+
+        :param register: register to wait on.
+        :type register: int
+        :param bit_mask: bit mask to filter for the concerned bits.
+        :type bit_mask: int
+        :param error_msg: error message if the timeout is exceeded.
+        :type error_msg: str
+        :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
+        :type timeout_seconds: int
+        """
+        self.get_logger().debug(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+
+        timeout_count = 0
+        while read_register(register, debug=False) & bit_mask != 0:
+            self._rate.sleep() # sleeps for 10ms
+            timeout_count += 1
+            
+            if timeout_count % 10 == 0:
+                self.get_logger().debug(f"timeout count: {timeout_count}")
+
+            if timeout_count * 1e-2 > timeout_seconds: 
+                self.get_logger().error(error_msg)
+                break
+
+    def _alert_pin_triggered(self):
+        # implement some form of alarm to the SBC.  
+        pass
 
     def _check_reset(self):
         """Checks if a IC reset has occurred in the last 30 seconds.
@@ -190,6 +233,13 @@ class BatteryNode(Node):
             return
         else:
             self.init_chip()
+
+    def _add_sleep_node(self, node: Node):  # I hate how this is implemented, but for some reason this is called
+        # AFTER it wants the sleep node, it breaks. If I add it beforehand it's not spun so it just blocks forever.
+        self.get_logger().debug("adding sleep node")
+        self._sleep_node = node
+        self._rate = self._sleep_node.create_rate(1e2)
+
 
     def init_chip(self):  # initialising the IC chip on powerup.
 
@@ -236,47 +286,6 @@ class BatteryNode(Node):
         self._timer.reset()
         self._save_charge.reset()
 
-    def _is_address(self):
-        """Checks if an i2c address exists.
-
-        :return: bool
-        :rtype: bool
-        """
-
-        try: 
-            _ = read_register(Status_Reg)
-        except OSError as e:
-            self.get_logger().error(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")
-            raise OSError
-        
-        return True
-        
-    def _wait(self, register, bit_mask, error_msg, timeout_seconds=2):
-
-        """ Waits for a bit or a set of bits to be toggled.
-
-        :param register: register to wait on.
-        :type register: int
-        :param bit_mask: bit mask to filter for the concerned bits.
-        :type bit_mask: int
-        :param error_msg: error message if the timeout is exceeded.
-        :type error_msg: str
-        :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
-        :type timeout_seconds: int
-        """
-        self.get_logger().debug(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
-
-        timeout_count = 0
-        while read_register(register, debug=False) & bit_mask != 0:
-            self._rate.sleep() # sleeps for 10ms
-            timeout_count += 1
-            
-            if timeout_count % 10 == 0:
-                self.get_logger().debug(f"timeout count: {timeout_count}")
-
-            if timeout_count * 1e-2 > timeout_seconds: 
-                self.get_logger().error(error_msg)
-                break
 
     def _save_params(self): 
 
@@ -408,6 +417,13 @@ class BatteryNode(Node):
         if read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
             self.get_logger().error("Critical Error: Battery has been removed!") 
 
+    def __del__(self):
+        # on shutdown I want to save the battery data just in case.
+        # there exists this: https://docs.ros2.org/foxy/api/rclpy/api/context.html,
+        # but I don't trust the context to shutdown the node AFTER I call this and make
+        # everything implode sooooo
+        self._save_params()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -433,3 +449,5 @@ def main(args=None):
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
         executor_thread.join()
 
+# TODO: Can try to port the rate object into another private node
+# hosted by BatteryNode and avoid all the multithreading?

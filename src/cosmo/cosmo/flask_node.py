@@ -2,6 +2,8 @@ import rclpy
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
+from rosidl_runtime_py.convert import message_to_ordereddict
+
 from std_msgs.msg import String
 from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
@@ -36,10 +38,12 @@ class FlaskNode(Node):
 
         self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
         self.control_pub = self.create_publisher(msg_type=String, topic="/flask/output/commands", qos_profile=QoS)
+        
         self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS, callback=self._battery_callback)
         self.motor_sub = self.create_subscription(msg_type=String, topic="/flask/input/battery", qos_profile=QoS, callback=self._motor_callback)
+        self.model_sub = self.camera_subscription(msg_type=Image, topic="/flask/input/model", qos_profile=QoS)
 
-        self.metrics = None
+        self.battery_metrics = None
                 
         # self.command_queue = Queue() # pass this into the server so it can send back data...
         # # Can we send a function/method instead to run to pass back data?
@@ -58,14 +62,17 @@ class FlaskNode(Node):
         self.control_pub.publish(msg)
 
     def _get_data(self):
-        return self.metrics
+        return {
+            "battery": self.battery_metrics,
+            "motor": ...,
+            "temps": ...
+                }  # will provide more
     
     def _battery_callback(self, msg):
         # send back relevant data metrics from battery, motor, temps, etc. 
         # assign data values from the ros2 message into a dict or something to store data
         # there will be another function for the flask server to call to retrieve these values
-        # self.metrics = None
-        pass
+        self.battery_metrics = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
 
     def _motor_callback(self, msg):
         pass

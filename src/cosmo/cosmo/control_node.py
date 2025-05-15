@@ -36,10 +36,11 @@ class ControlNode(Node):
         self.motor_pub = self.create_publisher(msg_type=String, topic="/motor_driver/input", qos_profile=QoS)
         self.motor_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS, callback=self._motor_callback)
 
-        self.model_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/model/output", qos_profile=QoS, callback=self._model_callback)
+        self.model_sub = self.create_subscription(msg_type=Image, topic="/model/output", qos_profile=QoS, callback=self._model_callback)
         
         self.flask_battery_pub = self.create_publisher(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS)
         self.flask_motor_pub = self.create_publisher(msg_type=String, topic="/flask/input/motor", qos_profile=QoS)
+        self.flask_model_pub = self.create_publisher(msg_type=Image, topic='/flask/input/model', qos_profile=QoS)
 
         self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 

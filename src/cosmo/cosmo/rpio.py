@@ -29,8 +29,9 @@ nSLEEP  IN1 IN2 Description
 """
 
 
-I2C_ADDRESS = 0x6C # address defined in the MAX17263 user guide. 'Look up slave address'. Could alternatively
-        # be 0x36 for '7 MSb addresses', if 0x6C fails.  
+BATTERY_I2C_ADDRESS = 0x6C # address defined in the MAX17263 user guide. 'Look up slave address'. Could alternatively
+        # be 0x36 for '7 MSb addresses', if 0x6C fails.
+ADC_I2C_ADDRESS = 0x48  # check i2cdetect if this is correct or I got the wrong endian. 
 BUS = smbus.SMBus("/dev/i2c-1")  # the /dev/ bus number. Make sure the freq isn't faster than 400kHz.
 LOGGER = None  # Will be set when BatteryNode initialises. 
 
@@ -189,6 +190,25 @@ def get_pin(pin_number):
 # PWMPin2 = HardwarePWM(pwm_channel=0, hz=0.3, chip=1)
 # PWMPin3 = HardwarePWM(pwm_channel=1, hz=0.4, chip=1)
 
+def adc_write_register(register, word, debug=False):
+    if debug: 
+            LOGGER.debug( f"Writing value {bin(word)} to register {hex(register)}") 
+    BUS.write_word_data(ADC_I2C_ADDRESS, register, word)
+
+def adc_write_address_pointer(register, debug=False):
+    if debug: 
+            LOGGER.debug( f"Writing address pointer {hex(register)}")
+    BUS.write_byte(ADC_I2C_ADDRESS, register)
+
+def adc_read_register(debug=False):
+    
+    msb = BUS.read_byte(ADC_I2C_ADDRESS)
+    lsb = BUS.read_byte(ADC_I2C_ADDRESS)
+    ret = msb >> 8 | lsb # shift the MSB 8 bits and add on the LSB. 
+    if debug: 
+            LOGGER.debug( f"Reading conversion register, value={bin(ret)}")
+    return ret
+
 # ========================================================================
 #                           BatteryNode IO below
 # ========================================================================
@@ -205,7 +225,7 @@ def read_register(register, debug=True):  # uint8 register value
         if debug: 
             LOGGER.debug( f"Reading register {hex(register)}")
 
-        register_value = BUS.read_word_data(I2C_ADDRESS, register)
+        register_value = BUS.read_word_data(BATTERY_I2C_ADDRESS, register)
         return register_value
 
 
@@ -220,7 +240,7 @@ def write_register(register, value, debug=True):  # uint8 reg, uint16 value
     if debug: 
         LOGGER.debug( f"Writing value {hex(value)} to register {hex(register)}")
 
-    BUS.write_word_data(I2C_ADDRESS, register, value)
+    BUS.write_word_data(BATTERY_I2C_ADDRESS, register, value)
 
 
     # def _write_and_verify_register(self, register, value, attempts=3): # uint8 reg, uint16 value

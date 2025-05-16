@@ -1,7 +1,7 @@
 import gpiozero as gpio
 import smbus3 as smbus
-import json
-
+import os, json
+from pathlib import Path
 # This is meant to be a container for all the IO/pins that can be accessed by any relevant module. 
 #
 # Import rpio and call either set_pin with the pin number, pin base type (gpiozero docs), and the kwargs for the base type.
@@ -248,7 +248,11 @@ def write_register(register, value, debug=True) -> None:  # uint8 reg, uint16 va
     BUS.write_word_data(BATTERY_I2C_ADDRESS, register, value)
 
 
-def write_and_verify_register(register, value, debug=True, attempts=3, sleep_rate=None) -> bool: # uint8 reg, uint16 value
+def write_and_verify_register(register, 
+                              value, 
+                              debug=True, 
+                              attempts=3, 
+                              sleep_rate=None) -> bool: # uint8 reg, uint16 value
 
     """Write to a register and verify that the value is written properly.
 
@@ -272,7 +276,7 @@ def write_and_verify_register(register, value, debug=True, attempts=3, sleep_rat
         if value != read_register(register, debug=debug):
             _attempts += 1
         elif _attempts >= attempts:
-            LOGGER.error(f"Write Error: failed to write data '{hex(value)}' to register {register}.")
+            LOGGER.error(f"Write Error: failed to write data '{hex(value)}' to BMS register {register}.")
             return False
         else:
             return True
@@ -286,32 +290,44 @@ def hex_to_dec(hex):
     """
     return int(hex, 16)
 
-def write_json(json_data, file="battery_parameters.json"):
+def write_json(json_data, file="./battery_data.json"):
         """Write to the settings json file in the case there is an unexpected power outage.
 
         :param json_data: dictionary of setting values.
         :type json_data: dict
-        :param file: file path, defaults to local directory "battery_parameters.json".
+        :param file: file path, defaults to local directory "./battery_data.json".
         :type file: str, Pathlike object
         """
 
-        with open(file, "w") as fs:
+        with open(relpath(file), "w") as fs:
             json.dump(json_data, fs)
 
-def read_json(file="battery_parameters.json"):
+def read_json(file="./battery_data.json"):
 
     """Read the settings json file.
-
+    
+    :param file: file path, defaults to local directory "./battery_data.json".
+    :type file: str, Pathlike object
     :return: dictionary of setting values
     :rtype: dict
     """
 
     try:
-        with open(file, "r") as fs:
+        with open(relpath(file), "r") as fs:
             json_data = json.load(fs)
+        
+        if not json_data:
+             raise ValueError
+        
         return json_data
     
     except FileNotFoundError:
         LOGGER.warn(f"FileNotFoundError: {file} was not found, falling back to default values.")
-        return None
+    except ValueError:
+        LOGGER.warn(f"ValueError: {file} was empty, falling back to default values.")
+
+def relpath(filepath):
+    # access filepaths relative to the current script. 
+    # Use "./file/to/path" to access local directory files.
+    return Path(os.path.dirname(__file__), filepath)
 

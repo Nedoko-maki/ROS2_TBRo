@@ -1,3 +1,22 @@
 [2025-05-19 13:10:06.725] [6139] [HailoRT] [info] [device.cpp:51] [Device] OS Version: Linux 6.8.0-1024-raspi #28-Ubuntu SMP PREEMPT_DYNAMIC Thu Apr 17 12:20:20 UTC 2025 aarch64
 [2025-05-19 13:10:06.726] [6139] [HailoRT] [info] [control.cpp:113] [control__parse_identify_results] firmware_version is: 4.21.0
 [2025-05-19 13:10:06.726] [6139] [HailoRT] [info] [control.cpp:113] [control__parse_identify_results] firmware_version is: 4.21.0
+[2025-05-19 15:15:07.015] [26694] [HailoRT] [error] [file_utils.cpp:124] [open] CHECK failed - Failed opening file, path: ./stereonet.hef
+[2025-05-19 15:15:07.019] [26694] [HailoRT] [error] [hef.cpp:560] [parse_hef_file] CHECK_SUCCESS failed with status=HAILO_OPEN_FILE_FAILURE(13)
+[2025-05-19 15:15:07.019] [26694] [HailoRT] [error] [hef.cpp:1060] [Impl] Failed parsing HEF file
+[2025-05-19 15:15:07.019] [26694] [HailoRT] [error] [hef.cpp:333] [create] Failed creating HEF
+[2025-05-19 15:15:07.019] [26694] [HailoRT] [error] [hef.cpp:168] [create] CHECK_SUCCESS failed with status=HAILO_OPEN_FILE_FAILURE(13)
+[2025-05-19 15:17:45.344] [27145] [HailoRT] [info] [hef.cpp:1994] [get_network_group_and_network_name] No name was given. Addressing all networks of default network_group: stereonet
+[2025-05-19 15:23:01.329] [28450] [HailoRT] [error] [file_utils.cpp:124] [open] CHECK failed - Failed opening file, path: /home/cosmo/Documents/ros2_ws/install/cosmo/lib/python3.12/site-packages/cosmo/stereonet.hef
+[2025-05-19 15:23:01.329] [28450] [HailoRT] [error] [hef.cpp:560] [parse_hef_file] CHECK_SUCCESS failed with status=HAILO_OPEN_FILE_FAILURE(13)
+[2025-05-19 15:23:01.329] [28450] [HailoRT] [error] [hef.cpp:1060] [Impl] Failed parsing HEF file
+[2025-05-19 15:23:01.329] [28450] [HailoRT] [error] [hef.cpp:333] [create] Failed creating HEF
+[2025-05-19 15:23:01.329] [28450] [HailoRT] [error] [hef.cpp:168] [create] CHECK_SUCCESS failed with status=HAILO_OPEN_FILE_FAILURE(13)
+[2025-05-19 15:26:49.672] [29089] [HailoRT] [error] [hef.cpp:612] [parse_hef_file] Unsupported hef version 1936863074
+[2025-05-19 15:26:49.672] [29089] [HailoRT] [error] [hef.cpp:1060] [Impl] Failed parsing HEF file
+[2025-05-19 15:26:49.672] [29089] [HailoRT] [error] [hef.cpp:333] [create] Failed creating HEF
+[2025-05-19 15:26:49.672] [29089] [HailoRT] [error] [hef.cpp:168] [create] CHECK_SUCCESS failed with status=HAILO_HEF_NOT_SUPPORTED(92)
+[2025-05-19 15:35:02.712] [29590] [HailoRT] [error] [hef.cpp:612] [parse_hef_file] Unsupported hef version 1936863074
+[2025-05-19 15:35:02.714] [29590] [HailoRT] [error] [hef.cpp:1060] [Impl] Failed parsing HEF file
+[2025-05-19 15:35:02.714] [29590] [HailoRT] [error] [hef.cpp:333] [create] Failed creating HEF
+[2025-05-19 15:35:02.714] [29590] [HailoRT] [error] [hef.cpp:168] [create] CHECK_SUCCESS failed with status=HAILO_HEF_NOT_SUPPORTED(92)

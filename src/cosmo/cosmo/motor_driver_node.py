@@ -3,6 +3,8 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from std_msgs.msg import Float32MultiArray, String
+from cosmo_msgs.msg import SystemCommand
+
 import cosmo.rpio as rpio
 from cosmo.rpio import (
     DRV8701_Motor_LGPIO, 
@@ -64,7 +66,7 @@ class MotorDriverNode(Node):
         self._motor_state_timer = self.create_timer(ms_period, callback=self._read_adc)
 
         self.control_pub = self.create_publisher(msg_type=Float32MultiArray, topic="/motor_driver/output", qos_profile=QoS)
-        self.control_sub = self.create_subscription(msg_type=String, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
+        self.control_sub = self.create_subscription(msg_type=SystemCommand, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
         self.motor_set_L = DRV8701_Motor_LGPIO(12, 18, pwm_frequency=self.pwm_freq)
         self.motor_set_R = DRV8701_Motor_LGPIO(19, 13, pwm_frequency=self.pwm_freq)
 
@@ -121,11 +123,8 @@ class MotorDriverNode(Node):
         # any of the below, such as 'forward', and if the case has a value inside, then follow up with a semicolon and the value after.
         # e.g. 'forward:0.1' 
 
-        if ":" in msg.data:
-            command, value = msg.data.split(":")
-            value = float(value)
-        else:
-            command = msg.data
+        command = msg.command
+        value = msg.value
 
         self.get_logger().debug(f"command is {msg.data}")
 

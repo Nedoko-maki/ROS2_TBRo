@@ -6,6 +6,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 
 from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import BatteryState
+from cosmo_msgs.msg import SystemCommand
 
 import cosmo.rpio as rpio
 from cosmo.rpio import (hex_to_dec, 
@@ -170,7 +171,7 @@ class BatteryNode(Node):
         self._check_IC_reset  = self.create_timer(check_reset_period, self._check_reset) # check if the fuel gauge has been reset, and re-init if it has. 
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
-        self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
+        self.battery_sub = self.create_subscription(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
         self.state = {}
         detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 
@@ -274,13 +275,20 @@ class BatteryNode(Node):
             case "Special":
                 self.get_logger().warn("Should implement manually.")
                 
+
     def _battery_callback(self, msg):
+        command, value = msg.command, msg.value
 
-        """Callback function from the subscriber, calls the get_battery_state method. 
-        Sets the BatteryState values and publishes to the publisher. 
+        match command:
+            case "write_register": ...
+            case "read_register": ...
+
+    
+    def _send_data(self):
+
         """
-
-        self.get_battery_state()
+        Sets the BatteryState msg values and publishes to the publisher. 
+        """
 
         # https://learn.adafruit.com/scanning-i2c-addresses/raspberry-pi 
         # The I2C address can be found here
@@ -400,6 +408,8 @@ class BatteryNode(Node):
         
         if read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
             self.get_logger().error("Critical Error: Battery has been removed!") 
+
+        self._send_data()
 
     def __del__(self):
         # on shutdown I want to save the battery data just in case.

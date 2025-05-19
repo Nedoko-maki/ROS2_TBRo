@@ -5,6 +5,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from std_msgs.msg import Int16MultiArray, String
 from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
+from cosmo_msgs.msg import SystemInfo, SystemCommand
 
 import threading 
 
@@ -33,7 +34,7 @@ class ControlNode(Node):
     def __init__(self, sleep_node):
         super().__init__("control_node")
 
-        self.motor_pub = self.create_publisher(msg_type=String, topic="/motor_driver/input", qos_profile=QoS)
+        self.motor_pub = self.create_publisher(msg_type=SystemCommand, topic="/motor_driver/input", qos_profile=QoS)
         self.motor_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS, callback=self._motor_callback)
 
         self.model_sub = self.create_subscription(msg_type=Image, topic="/model/output", qos_profile=QoS, callback=self._model_callback)
@@ -44,7 +45,7 @@ class ControlNode(Node):
 
         self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 
-        self.battery_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS)
+        self.battery_pub = self.create_publisher(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
         self.battery_data = None
@@ -90,19 +91,23 @@ class ControlNode(Node):
     def test_motors(self):
         
         test_commands = [
-            "forward:0.1",
-            "reverse:0.2",
-            "motor_left:0.3",
-            "motor_right:0.25",
-            "coast",
-            "brake",
-            "sleep",
-            "wake"
+            ["forward", 0.1],
+            ["reverse", 0.2],
+            ["motor_left", 0.3],
+            ["motor_right", 0.25],
+            ["coast"],
+            ["brake"],
+            ["sleep"],
+            ["wake"]
                         ]
 
         for cmd in test_commands:
-            msg = String()
-            msg.data = cmd
+            msg = SystemCommand()
+            if len(cmd) == 1:
+                msg.command, msg.value = cmd[0]
+            else:
+                msg.command, msg.value = cmd[0], None
+
             self.test_rate.sleep()
             self.motor_pub.publish(msg)
 

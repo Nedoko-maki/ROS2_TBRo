@@ -157,12 +157,15 @@ class BatteryNode(Node):
             self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
         rpio.LOGGER = self.get_logger()
 
+        self.ALRT_OUT_PIN = rpio.set_pin(4, rpio.OutputPin) # GPIO4
+        self.ALRT_OUT_PIN.when_deactivated = self._alert_pin_triggered
+
         battery_update_period = 0.5  # period for sending the battery metrics to control node
         save_params_period = 10  # check to save the battery metrics
         check_reset_period = 4  # check if the IC has reset
 
         self._timer = self.create_timer(battery_update_period, self.get_battery_state, autostart=False)  # for updating the battery status  
-        self._save_charge = self.create_timer(save_params_period, self._save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
+        self._save_charge = self.create_timer(save_params_period, self.save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
         self._check_IC_reset  = self.create_timer(check_reset_period, self._check_reset) # check if the fuel gauge has been reset, and re-init if it has. 
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
@@ -171,70 +174,6 @@ class BatteryNode(Node):
         self.state = {}
         self._is_address()  # check that i2c address 0x6c is connected and readable. 
         # self._check_reset()
-
-    def _add_sleep_node(self, node: Node):  # I hate how this is implemented, but for some reason this is called
-        # AFTER it wants the sleep node, it breaks. If I add it beforehand it's not spun so it just blocks forever.
-        self.get_logger().debug("adding sleep node")
-        self._sleep_node = node
-        self._rate = self._sleep_node.create_rate(1e2)
-
-    def _check_reset(self):
-        """Checks if a IC reset has occurred in the last 30 seconds.
-        """
-        
-        STATUS_POR_BIT = read_register(Status_Reg) & 0x0002
-        self.get_logger().debug( f"STATUSREG = {bin(read_register(Status_Reg))}, POR_BIT = {STATUS_POR_BIT}")
-
-        if STATUS_POR_BIT == 0: # check if the IC has been reset.
-            self.get_battery_state()
-            return
-        else:
-            self.init_chip()
-
-    def init_chip(self):  # initialising the IC chip on powerup.
-
-        """Goes through the given startup commands to wake up the MAX17263 chip as described here:
-
-        https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
-        """
-    
-        self.get_logger().debug( "STARTING INIT CHIP")
-
-        HibCFG = read_register(HibCfg_Reg)  # Store original HibCFG values
-        write_register(Command_Reg, 0x90)  # exiting hibernate mode step 1
-        write_register(HibCfg_Reg, 0x0)  # step 2
-        write_register(Command_Reg, 0x0)  # step 3
-
-        msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 5 seconds."
-        self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
-        self.get_logger().debug(f"FSTAT.DNR cleared.")
-
-        write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
-        write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
-        write_register(VEmpty_Reg, self.battery_params["VEmpty"])
-        write_register(FullSOCThr_Reg, self.battery_params["FullSOCThr"])
-        write_register(Config_Reg, read_register(Config_Reg) | 0x8000)  # Setting TSEL to 1 for external NTC. Might need to be placed elsewhere in case it breaks something.
-        write_register(ModelCfg_Reg, self.model_cfg)  # Set the ModelCfg register
-        
-        msg_2 = f"Timeout: the ModelCFG.Refresh bit (bit 15) confirming model loading was not cleared."
-        self._wait(ModelCfg_Reg, 0x8000, msg_2) # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading.
-
-        self.get_logger().debug(f"ModelCFG loaded.")
-
-        json_data = read_json()
-
-        if json_data: # if the return value is not None, write to registers. 
-            write_register(RComp0_Reg, hex_to_dec(json_data["RComp0"]))
-            write_register(TempCo_Reg, hex_to_dec(json_data["TempCo"]))
-
-        # Missing QRTable10-40?
-
-        write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
-
-        self.get_logger().debug("ENDING INIT CHIP")
-
-        self._timer.reset()
-        self._save_charge.reset()
 
     def _is_address(self):
         """Checks if an i2c address exists.
@@ -278,65 +217,28 @@ class BatteryNode(Node):
                 self.get_logger().error(error_msg)
                 break
 
-    def _save_params(self): 
+    def _alert_pin_triggered(self):
+        # implement some form of alarm to the SBC.  
+        pass
 
-        """Save parameters to a json file every 64% that is charged and discharged. (Recommended by the datasheet to perform this)
+    def _check_reset(self):
+        """Checks if a IC reset has occurred in the last 30 seconds.
         """
-
-        if read_register(Cycles_Reg) & 0b100000:  # check bit[5]. COULD BE WRONG IF THE ENDIAN IS WRONG. 
-            SAVED_RCOMP0 = read_register(RComp0_Reg)  # characterisation information for open circuit operation
-            SAVED_TempCo = read_register(TempCo_Reg)  # temperature compensation information for RComp0 reg
-            SAVED_FullCapRep = read_register(FullCapRep_Reg) # reports the full capacity that goes with RepCap, generally used for reporting to the GUI
-            SAVED_Cycles = read_register(Cycles_Reg)  # Total number of charge/discharge cycles of the cell that has occured. 
-            # Cycles has a full range of 0 to 655.35 cycles with a 1% LSB. 
-            SAVED_FullCapNom = read_register(FullCapNom_Reg)  # The full discharge capacity compensated according to present conditions. 
-
-        json_data = {
-            "RComp0": hex(SAVED_RCOMP0),
-            "TempCo": hex(SAVED_TempCo),
-            "FullCapRep": hex(SAVED_FullCapRep),
-            "Cycles": hex(SAVED_Cycles),
-            "FullCapNom": hex(SAVED_FullCapNom)
-                     }
         
-        write_json(json_data)
+        STATUS_POR_BIT = read_register(Status_Reg) & 0x0002
+        self.get_logger().debug( f"STATUSREG = {bin(read_register(Status_Reg))}, POR_BIT = {STATUS_POR_BIT}")
 
+        if STATUS_POR_BIT == 0: # check if the IC has been reset.
+            self.get_battery_state()
+            return
+        else:
+            self.init_chip()
 
-    def _battery_callback(self, msg):
-
-        """Callback function from the subscriber, calls the get_battery_state method. 
-        Sets the BatteryState values and publishes to the publisher. 
-        """
-
-        self.get_battery_state()
-
-        # https://learn.adafruit.com/scanning-i2c-addresses/raspberry-pi 
-        # The I2C address can be found here
-
-        # Some form of data processing here to interpret the data, then convert it to a stdmsg type to send over ROS. 
-
-        msg = BatteryState() # Create a message of this type, parameters are here: https://docs.ros2.org/foxy/api/sensor_msgs/msg/BatteryState.html
-        msg.voltage = self._conv(self.state["AvgVCell"], "Voltage")  # set this to the battery voltage
-        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # # charge percentage normalised from 0 to 1. 
-        msg.current = self._conv(self.state["AvgCurrent"], "Current") # discharge current, negative when discharging. 
-        msg.charge = self._conv(self.state["RepCap"], "Capacity") # charge in Ah.
-        msg.capacity = self._conv(self.state["FullCapRep"], "Capacity")  # capacity in Ah. 
-        msg.design_capacity = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
-
-        # Power supply status (find in the ros2 docs):
-        # 0 = UNKNOWN
-        # 1 = CHARGING
-        # 2 = DISCHARGING
-        # 3 = NOT_CHARGING
-        # 4 = FULL
-
-        # msg.power_supply_status = 0 # haven't found an easy way to check the exact state of the battery with a single register.
-        # May need to calculate it manually (yuck). 
-
-        msg.battery_present = self.state["BatteryPresent"]
-
-        self.battery_pub.publish(msg) # Publish BatteryState message 
-
+    def _add_sleep_node(self, node: Node):  # I hate how this is implemented, but for some reason this is called
+        # AFTER it wants the sleep node, it breaks. If I add it beforehand it's not spun so it just blocks forever.
+        self.get_logger().debug("adding sleep node")
+        self._sleep_node = node
+        self._rate = self._sleep_node.create_rate(1e2)
 
     def _conv(self, value, register_type):
 
@@ -385,6 +287,110 @@ class BatteryNode(Node):
             case "Special":
                 self.get_logger().warn("Should implement manually.")
                 
+    def _battery_callback(self, msg):
+
+        """Callback function from the subscriber, calls the get_battery_state method. 
+        Sets the BatteryState values and publishes to the publisher. 
+        """
+
+        self.get_battery_state()
+
+        # https://learn.adafruit.com/scanning-i2c-addresses/raspberry-pi 
+        # The I2C address can be found here
+
+        # Some form of data processing here to interpret the data, then convert it to a stdmsg type to send over ROS. 
+
+        msg = BatteryState() # Create a message of this type, parameters are here: https://docs.ros2.org/foxy/api/sensor_msgs/msg/BatteryState.html
+        msg.voltage = self._conv(self.state["AvgVCell"], "Voltage")  # set this to the battery voltage
+        msg.percentage = self._conv(self.state["RepSOC"], "Percentage")  # # charge percentage normalised from 0 to 1. 
+        msg.current = self._conv(self.state["AvgCurrent"], "Current") # discharge current, negative when discharging. 
+        msg.charge = self._conv(self.state["RepCap"], "Capacity") # charge in Ah.
+        msg.capacity = self._conv(self.state["FullCapRep"], "Capacity")  # capacity in Ah. 
+        msg.design_capacity = self._conv(self.state["DesignCap"], "Capacity")  # Design capacity
+
+        # Power supply status (find in the ros2 docs):
+        # 0 = UNKNOWN
+        # 1 = CHARGING
+        # 2 = DISCHARGING
+        # 3 = NOT_CHARGING
+        # 4 = FULL
+
+        # msg.power_supply_status = 0 # haven't found an easy way to check the exact state of the battery with a single register.
+        # May need to calculate it manually (yuck). 
+
+        msg.battery_present = self.state["BatteryPresent"]
+
+        self.battery_pub.publish(msg) # Publish BatteryState message 
+                
+    def init_chip(self):  # initialising the IC chip on powerup.
+
+        """Goes through the given startup commands to wake up the MAX17263 chip as described here:
+
+        https://www.analog.com/media/en/technical-documentation/user-guides/modelgauge-m5-host-side-software-implementation-guide.pdf
+        """
+    
+        self.get_logger().debug( "STARTING INIT CHIP")
+
+        HibCFG = read_register(HibCfg_Reg)  # Store original HibCFG values
+        write_register(Command_Reg, 0x90)  # exiting hibernate mode step 1
+        write_register(HibCfg_Reg, 0x0)  # step 2
+        write_register(Command_Reg, 0x0)  # step 3
+
+        msg = f"Timeout: the IC MAX17263 did not clear the DNR bit in the Fstat register within 5 seconds."
+        self._wait(0x3D, 0x01, msg)  # Wait for Fstat.DNR bit clear. 
+        self.get_logger().debug(f"FSTAT.DNR cleared.")
+
+        write_register(DesignCap_Reg, self.battery_params["DesignCap"])  # writing params to the chip. 
+        write_register(IchgTerm_Reg, self.battery_params["IchgTerm"])
+        write_register(VEmpty_Reg, self.battery_params["VEmpty"])
+        write_register(FullSOCThr_Reg, self.battery_params["FullSOCThr"])
+        write_register(Config_Reg, read_register(Config_Reg) | 0x8000)  # Setting TSEL to 1 for external NTC. Might need to be placed elsewhere in case it breaks something.
+        write_register(ModelCfg_Reg, self.model_cfg)  # Set the ModelCfg register
+        
+        msg_2 = f"Timeout: the ModelCFG.Refresh bit (bit 15) confirming model loading was not cleared."
+        self._wait(ModelCfg_Reg, 0x8000, msg_2) # Poll ModelCFG.Refresh(highest bit) until it becomes 0 to confirm IC completes model loading.
+
+        self.get_logger().debug(f"ModelCFG loaded.")
+
+        json_data = read_json()
+
+        if json_data: # if the return value is not None, write to registers. 
+            write_register(RComp0_Reg, hex_to_dec(json_data["RComp0"]))
+            write_register(TempCo_Reg, hex_to_dec(json_data["TempCo"]))
+
+        # Missing QRTable10-40?
+
+        write_register(HibCfg_Reg, HibCFG) # restore original HibCFG values. 
+
+        self.get_logger().debug("ENDING INIT CHIP")
+
+        self._timer.reset()
+        self._save_charge.reset()
+
+
+    def save_params(self): 
+
+        """Save parameters to a json file every 64% that is charged and discharged. (Recommended by the datasheet to perform this)
+        """
+
+        if read_register(Cycles_Reg) & 0b100000:  # check bit[5]. COULD BE WRONG IF THE ENDIAN IS WRONG. 
+            SAVED_RCOMP0 = read_register(RComp0_Reg)  # characterisation information for open circuit operation
+            SAVED_TempCo = read_register(TempCo_Reg)  # temperature compensation information for RComp0 reg
+            SAVED_FullCapRep = read_register(FullCapRep_Reg) # reports the full capacity that goes with RepCap, generally used for reporting to the GUI
+            SAVED_Cycles = read_register(Cycles_Reg)  # Total number of charge/discharge cycles of the cell that has occured. 
+            # Cycles has a full range of 0 to 655.35 cycles with a 1% LSB. 
+            SAVED_FullCapNom = read_register(FullCapNom_Reg)  # The full discharge capacity compensated according to present conditions. 
+
+        json_data = {
+            "RComp0": hex(SAVED_RCOMP0),
+            "TempCo": hex(SAVED_TempCo),
+            "FullCapRep": hex(SAVED_FullCapRep),
+            "Cycles": hex(SAVED_Cycles),
+            "FullCapNom": hex(SAVED_FullCapNom)
+                     }
+        
+        write_json(json_data)
+
 
     def get_battery_state(self):
 
@@ -407,6 +413,13 @@ class BatteryNode(Node):
         
         if read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
             self.get_logger().error("Critical Error: Battery has been removed!") 
+
+    def __del__(self):
+        # on shutdown I want to save the battery data just in case.
+        # there exists this: https://docs.ros2.org/foxy/api/rclpy/api/context.html,
+        # but I don't trust the context to shutdown the node AFTER I call this and make
+        # everything implode sooooo
+        self._save_params()
 
 
 def main(args=None):
@@ -433,3 +446,5 @@ def main(args=None):
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
         executor_thread.join()
 
+# TODO: Can try to port the rate object into another private node
+# hosted by BatteryNode and avoid all the multithreading?

@@ -2,12 +2,15 @@ import rclpy
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
-from std_msgs.msg import Int16MultiArray, String
+from std_msgs.msg import Float32MultiArray, String
 import cosmo.rpio as rpio
 from cosmo.rpio import (
     DRV8701_Motor_LGPIO, 
     InputPin, 
-    OutputPin, 
+    OutputPin,
+    adc_read_register,
+    adc_write_address_pointer,
+    adc_write_register
                         ) 
 
 
@@ -56,7 +59,10 @@ class MotorDriverNode(Node):
     def __init__(self):
         super().__init__("motor_driver_node")
 
-        self.control_pub = self.create_publisher(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS)
+        ms_period = 1
+        self._motor_state_timer = self.create_timer(ms_period, callback=self._read_adc)
+
+        self.control_pub = self.create_publisher(msg_type=Float32MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=String, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
         self.motor_set_L = DRV8701_Motor_LGPIO(12, 18, pwm_frequency=self.pwm_freq)
         self.motor_set_R = DRV8701_Motor_LGPIO(19, 13, pwm_frequency=self.pwm_freq)
@@ -79,12 +85,13 @@ class MotorDriverNode(Node):
         # Device sleep mode: pull logic low for sleep mode. Otherwise set logic high. 
         self.pins["NSLEEP"] = rpio.set_pin(self.pins["NSLEEP"], OutputPin, active_high=True, initial_value=True) 
 
+        self.motor_states = {
+            "RIGHT1": {"AIN": 0b111, "value": None}, 
+            "RIGHT2": {"AIN": 0b110, "value": None}, 
+            "LEFT1": {"AIN": 0b101, "value": None}, 
+            "LEFT2": {"AIN": 0b100, "value": None}
+            }
         # TI documentation on the motor drivers: https://www.ti.com/lit/ds/symlink/drv8701.pdf
-
-
-    def _log(self, msg):
-        self.get_logger().info(msg)
-
 
     def _fault_detected(self, device):
         self.get_logger().warn(f"Motor Fault: {device.motor_name} has pulled nFAULT low.")
@@ -145,7 +152,56 @@ class MotorDriverNode(Node):
             case "sleep": self.pins["NSLEEP"].off()
             case "wake": self.pins["NSLEEP"].on()
 
+    def _read_adc(self):
+        # 00b Conversion reg 
+        # 01b Config reg
+        # 10b Low_thresh reg
+        # 11b High_thresh reg
 
+        # OS[15] = 0, doesn't affect writes, during reads it reports 
+        # if a conversion is ongoing (0 if true, 1 for false)
+
+        # mux[14:12]
+        # AIN0 sel = b100
+        # AIN1 sel = b101
+        # AIN2 sel = b110
+        # AIN3 sel = b111
+
+        # programmable gain [11:9], full scale resolution. 
+        # Let's set to the max possible (000b) 
+        
+        # continuous vs single op mode [8]
+        # set to continuous (0b)
+
+        # data rate [7:5]
+        # Samples per second (SPS), we don't need more than 128/s...
+        # (000b)
+
+        # comparator mode [4]
+        # leave this be (0b)
+
+        # polarity of alrt/rdy pin [3]
+        # leave this be (0b)
+
+        # latching comparator [2]
+        # leave this be (0b) 
+
+        # comparator queue and disable [1:0]
+        # leave this be (11b)
+
+
+        config_reg_fmt = 0b0100000000000011
+
+        for motor_name in self.motor_states:
+            config_reg_data = config_reg_fmt |  self.motor_states[motor_name]["AIN"] << 12
+            adc_write_register(0b01, config_reg_data) # write to Config reg
+            ret = adc_read_register() # read the Conversion reg
+            self.motor_states[motor_name]["value"] = ret  # MAY NEED TO CONVERT TO A FLOAT VALUE HERE
+
+            # if this doesn't work, it might need to wait for the ALRT/RDY pin and go off that. 
+
+        self.control_pub.publish([_["value"] for m_name, _ in self.motor_states.items()])  # float32 array
+        
 def main(args=None):
     rclpy.init(args=args)
     _motor_node = MotorDriverNode()

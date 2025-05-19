@@ -176,9 +176,6 @@ class BatteryNode(Node):
         detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 
         # self._check_reset()
 
-    
-        
-        return True
         
     def _wait(self, register, bit_mask, error_msg, timeout_seconds=2):
 

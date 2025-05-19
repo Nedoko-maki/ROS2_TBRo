@@ -45,9 +45,11 @@ class ModelNode(Node):
         self.flask_sub = self.create_subscription(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS, callback=self._model_callback)
 
         # import cosmo.model.test_simple as model_test
-        # model_test.test_simple()
-        
-        run_model.run_example()
+
+        # The HAILORT middleware is freaking out about a HEF file I gave it (??) which they 
+        # gave so count me befuddled. Might look into compiling DepthAnythingV2 into a .hef file format
+        # after my report is done        
+        # run_model.run_example()
 
         # Maybe it is a good idea to run this in a separate thread? 
 

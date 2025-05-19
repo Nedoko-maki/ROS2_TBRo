@@ -224,6 +224,7 @@ def detect_i2c(component):
             match component:
                 case "battery": _ = read_register(0x00)
                 case "adc": _ = adc_read_register()
+            return True
         except OSError as e:
             LOGGER = BATTERY_LOGGER if component=="battery" else MOTOR_LOGGER
             LOGGER.error(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")

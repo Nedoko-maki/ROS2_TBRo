@@ -6,6 +6,7 @@ from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
+from cosmo.model import run_model
 
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
@@ -23,12 +24,8 @@ QoS = QoSProfile(
 )
 
 
-#
-# 
-# Doubt this reaches the final iteration of COSMO because of how processing intensive ML models can be. We haven't 
-# got the budget to buy an AI hat and I can't shell out that money sadly. 
-#
-#
+# WARNING TO DO WITH THE HAILORT MIDDLEWARE FOR PYTHON: Tricked pip into installing the 4.21.0 py3.11 package on py3.12.
+# Theoretically should be fine, but it is a thing I did to make it all work out. 
 
 # Using this model with 2.2M params vs DepthAnythingV2's 24.8M on their smallest model. 
 # https://github.com/noahzn/Lite-Mono?tab=readme-ov-file
@@ -49,6 +46,8 @@ class ModelNode(Node):
 
         # import cosmo.model.test_simple as model_test
         # model_test.test_simple()
+        
+        run_model.run_example()
 
         # Maybe it is a good idea to run this in a separate thread? 
 

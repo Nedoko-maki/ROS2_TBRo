@@ -7,8 +7,6 @@ from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
 import cv2
 
-from queue import Queue
-
 import cosmo.flask_app.app as flask_app
 
 QoS = QoSProfile(

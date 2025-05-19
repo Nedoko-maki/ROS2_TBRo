@@ -56,7 +56,10 @@ class ControlNode(Node):
         # self.test_motors()  ## some test code 
 
     def _send_battery_data_to_flask(self):
-        self.flask_battery_pub.publish(self.battery_data)
+        if self.battery_data:
+            self.flask_battery_pub.publish(self.battery_data)
+        else:
+            self.get_logger().debug(f"Battery data is empty! Check the battery_node for problems.")
 
     def _motor_callback(self, msg):
         pass  # receive data from motors

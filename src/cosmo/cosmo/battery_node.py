@@ -9,6 +9,7 @@ from sensor_msgs.msg import BatteryState
 
 import cosmo.rpio as rpio
 from cosmo.rpio import (hex_to_dec, 
+                        detect_i2c,
                         write_register, 
                         read_register, 
                         write_json,
@@ -155,9 +156,9 @@ class BatteryNode(Node):
         
         if debug:
             self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
-        rpio.LOGGER = self.get_logger()
+        rpio.BATTERY_LOGGER = self.get_logger()
 
-        self.ALRT_OUT_PIN = rpio.set_pin(4, rpio.OutputPin) # GPIO4
+        self.ALRT_OUT_PIN = rpio.set_pin(4, rpio.InputPin) # GPIO4
         self.ALRT_OUT_PIN.when_deactivated = self._alert_pin_triggered
 
         battery_update_period = 0.5  # period for sending the battery metrics to control node
@@ -172,21 +173,10 @@ class BatteryNode(Node):
         self.battery_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
         self.state = {}
-        self._is_address()  # check that i2c address 0x6c is connected and readable. 
+        detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 
         # self._check_reset()
 
-    def _is_address(self):
-        """Checks if an i2c address exists.
-
-        :return: bool
-        :rtype: bool
-        """
-
-        try: 
-            _ = read_register(Status_Reg)
-        except OSError as e:
-            self.get_logger().error(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")
-            raise OSError
+    
         
         return True
         
@@ -419,7 +409,7 @@ class BatteryNode(Node):
         # there exists this: https://docs.ros2.org/foxy/api/rclpy/api/context.html,
         # but I don't trust the context to shutdown the node AFTER I call this and make
         # everything implode sooooo
-        self._save_params()
+        self.save_params()
 
 
 def main(args=None):

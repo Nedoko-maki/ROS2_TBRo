@@ -33,8 +33,8 @@ BATTERY_I2C_ADDRESS = 0x6C # address defined in the MAX17263 user guide. 'Look u
         # be 0x36 for '7 MSb addresses', if 0x6C fails.
 ADC_I2C_ADDRESS = 0x48  # check i2cdetect if this is correct or I got the wrong endian. 
 BUS = smbus.SMBus("/dev/i2c-1")  # the /dev/ bus number. Make sure the freq isn't faster than 400kHz.
-LOGGER = None  # Will be set when BatteryNode initialises. 
-
+BATTERY_LOGGER = None  # Will be set when BatteryNode initialises. 
+MOTOR_LOGGER = None # Will be set when MotorDriverNode initialises. 
 # class DRV8701_Motor:
 
 #     def __init__(self, 
@@ -192,12 +192,12 @@ def get_pin(pin_number):
 
 def adc_write_register(register, word, debug=False):
     if debug: 
-            LOGGER.debug( f"Writing value {bin(word)} to ADC register {hex(register)}") 
+            MOTOR_LOGGER.debug( f"Writing value {bin(word)} to ADC register {hex(register)}") 
     BUS.write_word_data(ADC_I2C_ADDRESS, register, word)
 
 def adc_write_address_pointer(register, debug=False):
     if debug: 
-            LOGGER.debug( f"Writing ADC address pointer {hex(register)}")
+            MOTOR_LOGGER.debug( f"Writing ADC address pointer {hex(register)}")
     BUS.write_byte(ADC_I2C_ADDRESS, register)
 
 def adc_read_register(debug=False):
@@ -206,12 +206,28 @@ def adc_read_register(debug=False):
     lsb = BUS.read_byte(ADC_I2C_ADDRESS)
     ret = msb >> 8 | lsb # shift the MSB 8 bits and add on the LSB. 
     if debug: 
-            LOGGER.debug( f"Reading ADC conversion register, value={bin(ret)}")
+            MOTOR_LOGGER.debug( f"Reading ADC conversion register, value={bin(ret)}")
     return ret
 
 # ========================================================================
 #                           BatteryNode IO below
 # ========================================================================
+
+def detect_i2c(component):
+        """Checks if an i2c address exists.
+
+        :return: bool
+        :rtype: bool
+        """
+
+        try: 
+            match component:
+                case "battery": _ = read_register(0x00)
+                case "adc": _ = adc_read_register()
+        except OSError as e:
+            LOGGER = BATTERY_LOGGER if component=="battery" else MOTOR_LOGGER
+            LOGGER.error(f"{e}: likely the I2C address does not exist, check with cli command i2cdetect.")
+            raise OSError
 
 def read_register(register, debug=True) -> int:  # uint8 register value
 
@@ -225,7 +241,7 @@ def read_register(register, debug=True) -> int:  # uint8 register value
         :type debug: bool
         """
         if debug: 
-            LOGGER.debug( f"Reading BMS register {hex(register)}")
+            BATTERY_LOGGER.debug( f"Reading BMS register {hex(register)}")
 
         register_value = BUS.read_word_data(BATTERY_I2C_ADDRESS, register)
         return register_value
@@ -243,7 +259,7 @@ def write_register(register, value, debug=True) -> None:  # uint8 reg, uint16 va
     """
 
     if debug: 
-        LOGGER.debug( f"Writing value {hex(value)} to BMS register {hex(register)}")
+        BATTERY_LOGGER.debug( f"Writing value {hex(value)} to BMS register {hex(register)}")
 
     BUS.write_word_data(BATTERY_I2C_ADDRESS, register, value)
 
@@ -276,7 +292,7 @@ def write_and_verify_register(register,
         if value != read_register(register, debug=debug):
             _attempts += 1
         elif _attempts >= attempts:
-            LOGGER.error(f"Write Error: failed to write data '{hex(value)}' to BMS register {register}.")
+            BATTERY_LOGGER.error(f"Write Error: failed to write data '{hex(value)}' to BMS register {register}.")
             return False
         else:
             return True
@@ -322,9 +338,9 @@ def read_json(file="./battery_data.json"):
         return json_data
     
     except FileNotFoundError:
-        LOGGER.warn(f"FileNotFoundError: {file} was not found, falling back to default values.")
+        BATTERY_LOGGER.warn(f"FileNotFoundError: {file} was not found, falling back to default values.")
     except ValueError:
-        LOGGER.warn(f"ValueError: {file} was empty, falling back to default values.")
+        BATTERY_LOGGER.warn(f"ValueError: {file} was empty, falling back to default values.")
 
 def relpath(filepath):
     # access filepaths relative to the current script. 

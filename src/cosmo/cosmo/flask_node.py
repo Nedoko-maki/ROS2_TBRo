@@ -38,8 +38,8 @@ class FlaskNode(Node):
         self.control_pub = self.create_publisher(msg_type=String, topic="/flask/output/commands", qos_profile=QoS)
         
         self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS, callback=self._battery_callback)
-        self.motor_sub = self.create_subscription(msg_type=String, topic="/flask/input/battery", qos_profile=QoS, callback=self._motor_callback)
-        self.model_sub = self.camera_subscription(msg_type=Image, topic="/flask/input/model", qos_profile=QoS)
+        self.motor_sub = self.create_subscription(msg_type=String, topic="/flask/input/motor", qos_profile=QoS, callback=self._motor_callback)
+        self.model_sub = self.create_subscription(msg_type=Image, topic="/flask/input/model", qos_profile=QoS, callback=self._model_callback)
 
         self.battery_metrics = None
                 
@@ -73,6 +73,9 @@ class FlaskNode(Node):
         self.battery_metrics = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
 
     def _motor_callback(self, msg):
+        pass
+
+    def _model_callback(self, msg):
         pass
 
     def _convert_cv2_to_imgmsg(self, msg):

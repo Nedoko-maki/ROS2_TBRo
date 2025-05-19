@@ -8,6 +8,7 @@ from cosmo.rpio import (
     DRV8701_Motor_LGPIO, 
     InputPin, 
     OutputPin,
+    detect_i2c,
     adc_read_register,
     adc_write_address_pointer,
     adc_write_register
@@ -92,6 +93,9 @@ class MotorDriverNode(Node):
             "LEFT2": {"AIN": 0b100, "value": None}
             }
         # TI documentation on the motor drivers: https://www.ti.com/lit/ds/symlink/drv8701.pdf
+
+        rpio.MOTOR_LOGGER = self.get_logger()
+        detect_i2c("adc")
 
     def _fault_detected(self, device):
         self.get_logger().warn(f"Motor Fault: {device.motor_name} has pulled nFAULT low.")

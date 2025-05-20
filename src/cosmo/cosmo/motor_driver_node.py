@@ -2,7 +2,7 @@ import rclpy
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
-from std_msgs.msg import Float32MultiArray, String
+from std_msgs.msg import Float32MultiArray
 from cosmo_msgs.msg import SystemCommand
 
 import cosmo.rpio as rpio

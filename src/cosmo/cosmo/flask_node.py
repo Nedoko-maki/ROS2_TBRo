@@ -4,8 +4,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 
 from rosidl_runtime_py.convert import message_to_ordereddict
 
-from std_msgs.msg import String
-from sensor_msgs.msg import Image, BatteryState
+from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
@@ -38,7 +37,7 @@ class FlaskNode(Node):
         self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
         
         self.control_pub = self.create_publisher(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS)
-        self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input/battery", qos_profile=QoS, callback=self._control_callback)
+        self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
 
         self.data = None
                 

@@ -4,7 +4,6 @@ import rclpy.logging
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
-from std_msgs.msg import Int16MultiArray
 from sensor_msgs.msg import BatteryState
 from cosmo_msgs.msg import SystemCommand
 

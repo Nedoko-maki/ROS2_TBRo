@@ -9,6 +9,7 @@ from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
 import cv2
 
+from cosmo_msgs.msg import SystemInfo, SystemCommand
 import cosmo.flask_app.app as flask_app
 
 QoS = QoSProfile(
@@ -35,13 +36,11 @@ class FlaskNode(Node):
         super().__init__("flask_node")
 
         self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
-        self.control_pub = self.create_publisher(msg_type=String, topic="/flask/output/commands", qos_profile=QoS)
         
-        self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS, callback=self._battery_callback)
-        self.motor_sub = self.create_subscription(msg_type=String, topic="/flask/input/motor", qos_profile=QoS, callback=self._motor_callback)
-        self.model_sub = self.create_subscription(msg_type=Image, topic="/flask/input/model", qos_profile=QoS, callback=self._model_callback)
+        self.control_pub = self.create_publisher(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS)
+        self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input/battery", qos_profile=QoS, callback=self._control_callback)
 
-        self.battery_metrics = None
+        self.data = None
                 
         # self.command_queue = Queue() # pass this into the server so it can send back data...
         # # Can we send a function/method instead to run to pass back data?
@@ -53,10 +52,10 @@ class FlaskNode(Node):
         # flask_app.start_server(receive_callback=_receive_command, send_callback=_get_data)
         # self.vcap = cv2.VideoCapture(url)
 
-    def _receive_command(self, command):
+    def _receive_command(self, command, value):
         # receive commands from the flask app and publish to the /flask/output/commands topic
-        msg = String()
-        msg.data = command
+        msg = SystemCommand()
+        msg.command, msg.value = command, value
         self.control_pub.publish(msg)
 
     def _get_data(self):
@@ -66,17 +65,12 @@ class FlaskNode(Node):
             "temps": ...
                 }  # will provide more
     
-    def _battery_callback(self, msg):
+    def _control_callback(self, msg):
         # send back relevant data metrics from battery, motor, temps, etc. 
         # assign data values from the ros2 message into a dict or something to store data
         # there will be another function for the flask server to call to retrieve these values
-        self.battery_metrics = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
+        self.data = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
 
-    def _motor_callback(self, msg):
-        pass
-
-    def _model_callback(self, msg):
-        pass
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")

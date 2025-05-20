@@ -202,8 +202,10 @@ class MotorDriverNode(Node):
             self.motor_states[motor_name]["value"] = ret  # MAY NEED TO CONVERT TO A FLOAT VALUE HERE
 
             # if this doesn't work, it might need to wait for the ALRT/RDY pin and go off that. 
-
-        self.control_pub.publish([_["value"] for m_name, _ in self.motor_states.items()])  # float32 array
+        
+        msg = Float32MultiArray()
+        msg.data = [_["value"] for m_name, _ in self.motor_states.items()]
+        self.control_pub.publish(msg)  # float32 array
         
 def main(args=None):
     rclpy.init(args=args)

@@ -2,7 +2,10 @@ import rclpy
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
-from std_msgs.msg import Int16MultiArray, String
+from rosidl_runtime_py.convert import message_to_ordereddict
+from rosidl_runtime_py.set_message import set_message_fields
+
+from std_msgs.msg import Float32MultiArray, String
 from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
 from cosmo_msgs.msg import SystemInfo, SystemCommand
@@ -35,20 +38,17 @@ class ControlNode(Node):
         super().__init__("control_node")
 
         self.motor_pub = self.create_publisher(msg_type=SystemCommand, topic="/motor_driver/input", qos_profile=QoS)
-        self.motor_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/motor_driver/output", qos_profile=QoS, callback=self._motor_callback)
+        self.motor_sub = self.create_subscription(msg_type=Float32MultiArray, topic="/motor_driver/output", qos_profile=QoS, callback=self._motor_callback)
 
         self.model_sub = self.create_subscription(msg_type=Image, topic="/model/output", qos_profile=QoS, callback=self._model_callback)
         
-        self.flask_battery_pub = self.create_publisher(msg_type=BatteryState, topic="/flask/input/battery", qos_profile=QoS)
-        self.flask_motor_pub = self.create_publisher(msg_type=String, topic="/flask/input/motor", qos_profile=QoS)
-        self.flask_model_pub = self.create_publisher(msg_type=Image, topic='/flask/input/model', qos_profile=QoS)
-
-        self.flask_sub = self.create_subscription(msg_type=Int16MultiArray, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
+        self.flask_pub = self.create_publisher(msg_type=SystemInfo, topic="/flask/input", qos_profile=QoS)
+        self.flask_sub = self.create_subscription(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS, callback=self._flask_callback)
 
         self.battery_pub = self.create_publisher(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
-        self.battery_data = None
+        self.battery_data, self.motor_data, self.model_data = None, None, None
 
         self.test_timer = self.create_timer(20, callback=self.test_motors)
         self.test_rate = sleep_node.create_rate(4)
@@ -56,14 +56,24 @@ class ControlNode(Node):
         self._send_to_flask_timer = self.create_timer(1, callback=self._send_battery_data_to_flask)
         # self.test_motors()  ## some test code 
 
-    def _send_battery_data_to_flask(self):
-        if self.battery_data:
-            self.flask_battery_pub.publish(self.battery_data)
-        else:
-            self.get_logger().debug(f"Battery data is empty! Check the battery_node for problems.")
+    def _send_data_to_flask(self):
+        msg = SystemInfo()
+
+        for popdata in [self.battery_data, self.motor_data]:
+            if popdata:
+                set_message_fields(msg, popdata)
+            else:
+                self.get_logger().debug(f"Data is empty! Check the node for problems.")
+        
+        if self.model_data:  # Hoping I don't need to modify the original image msg.
+            msg.image = self.model_data
+
+        self.flask_pub.publish(msg)
 
     def _motor_callback(self, msg):
-        pass  # receive data from motors
+        # receive data from motors
+        self.motor_data = message_to_ordereddict(msg)
+        self.motor_data["motor_states"] = self.motor_data.pop("data")
 
     def _flask_callback(self, msg):
         pass  # receieve commands from the flask app
@@ -76,11 +86,14 @@ class ControlNode(Node):
             # "charge": msg.charge,  # charge in Ah.
             # "capacity": msg.capacity,  # capacity in Ah. 
             # "design_capacity": msg.design_capacity  # Design capacity                 
-                            #  }   
-        self.battery_data = msg
+                            #  }
+                               
+        self.battery_data = message_to_ordereddict(msg)
+        # May need to filter out empty values if it includes ALL the fields of the BatteryState msg. 
 
     def _model_callback(self, msg):
-        pass  # receive ML-processed images from the model 
+        # receive ML-processed images from the model 
+        self.model_data = msg 
 
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")

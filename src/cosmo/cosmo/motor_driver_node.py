@@ -59,9 +59,12 @@ class MotorDriverNode(Node):
 
     
 
-    def __init__(self):
+    def __init__(self, debug=False):
         super().__init__("motor_driver_node")
 
+        if debug:   
+           rpio.MOTOR_LOGGER = self.get_logger()
+           
         ms_period = 1
         self._motor_state_timer = self.create_timer(ms_period, callback=self._read_adc)
 
@@ -71,7 +74,6 @@ class MotorDriverNode(Node):
         self.motor_set_R = DRV8701_Motor_LGPIO(19, 13, pwm_frequency=self.pwm_freq)
 
         for motor in [x for x in self.pins if x != "NSLEEP"]:
-
             for pin_name, pin in self.pins[motor].items():
                 # self.get_logger().debug(f"{motor}, pin_name: {pin_name}, {pin}")
                 
@@ -96,7 +98,6 @@ class MotorDriverNode(Node):
             }
         # TI documentation on the motor drivers: https://www.ti.com/lit/ds/symlink/drv8701.pdf
 
-        rpio.MOTOR_LOGGER = self.get_logger()
         detect_i2c("adc")
 
     def _fault_detected(self, device):

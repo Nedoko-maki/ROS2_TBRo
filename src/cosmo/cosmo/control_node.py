@@ -95,11 +95,11 @@ class ControlNode(Node):
         # receive ML-processed images from the model 
         self.model_data = msg 
 
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
+    def _convert_cv2_to_imgmsg(self, img):
+        return self.bridge.cv2_to_imgmsg(img, "passthrough")
     
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
+    def _convert_imgmsg_to_cv2(self, msg):
+        return self.bridge.imgmsg_to_cv2(msg, "passthrough")
     
     def test_motors(self):
         

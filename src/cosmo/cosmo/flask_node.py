@@ -34,7 +34,8 @@ class FlaskNode(Node):
     def __init__(self):
         super().__init__("flask_node")
 
-        self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)
+        self.camera_pub = self.create_publisher(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS)  
+        # may not need this, and can just pull it directly from the model node. 
         
         self.control_pub = self.create_publisher(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
@@ -71,12 +72,12 @@ class FlaskNode(Node):
         self.data = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
 
 
+    def _convert_imgmsg_to_cv2(self, msg):
+        return self.bridge.imgmsg_to_cv2(msg, "passthrough")
+
     def _convert_cv2_to_imgmsg(self, msg):
         return self.bridge.cv2_to_imgmsg(msg, "passthrough")
-    
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
-    
+        
 
 
 def main(args=None):

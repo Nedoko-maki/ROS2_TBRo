@@ -165,9 +165,9 @@ class BatteryNode(Node):
         save_params_period = 10  # check to save the battery metrics
         check_reset_period = 4  # check if the IC has reset
 
-        self._timer = self.create_timer(battery_update_period, self.get_battery_state, autostart=False)  # for updating the battery status  
-        self._save_charge = self.create_timer(save_params_period, self.save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
-        self._check_IC_reset  = self.create_timer(check_reset_period, self._check_reset) # check if the fuel gauge has been reset, and re-init if it has. 
+        self._battery_check = self.create_timer(battery_update_period, self.get_battery_state, autostart=False)  # for updating the battery status  
+        self._save_data_check = self.create_timer(save_params_period, self.save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
+        self._IC_reset_check  = self.create_timer(check_reset_period, self._check_reset) # check if the fuel gauge has been reset, and re-init if it has. 
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
@@ -177,7 +177,7 @@ class BatteryNode(Node):
         # self._check_reset()
 
         
-    def _wait(self, register, bit_mask, error_msg, timeout_seconds=2):
+    def _wait(self, register, bit_mask, error_msg, timeout=2):
 
         """ Waits for a bit or a set of bits to be toggled.
 
@@ -187,10 +187,10 @@ class BatteryNode(Node):
         :type bit_mask: int
         :param error_msg: error message if the timeout is exceeded.
         :type error_msg: str
-        :param timeout_seconds: _(optional)_ timeout time, defaults to 10 seconds.
-        :type timeout_seconds: int
+        :param timeout: _(optional)_ timeout time, defaults to 10 seconds.
+        :type timeout: int
         """
-        self.get_logger().debug(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout_seconds}.")
+        self.get_logger().debug(f"entering wait with reg {hex(register)}, bitmask {hex(bit_mask)}, {timeout}.")
 
         timeout_count = 0
         while read_register(register, debug=False) & bit_mask != 0:
@@ -200,7 +200,7 @@ class BatteryNode(Node):
             if timeout_count % 10 == 0:
                 self.get_logger().debug(f"timeout count: {timeout_count}")
 
-            if timeout_count * 1e-2 > timeout_seconds: 
+            if timeout_count * 1e-2 > timeout: 
                 self.get_logger().error(error_msg)
                 break
 
@@ -209,7 +209,7 @@ class BatteryNode(Node):
         pass
 
     def _check_reset(self):
-        """Checks if a IC reset has occurred in the last 30 seconds.
+        """Checks if a IC reset has occurred.
         """
         
         STATUS_POR_BIT = read_register(Status_Reg) & 0x0002
@@ -358,16 +358,16 @@ class BatteryNode(Node):
 
         self.get_logger().debug("ENDING INIT CHIP")
 
-        self._timer.reset()
-        self._save_charge.reset()
+        self._battery_check.reset()
+        self._save_data_check.reset()
 
 
-    def save_params(self): 
+    def save_params(self, force=False): 
 
         """Save parameters to a json file every 64% that is charged and discharged. (Recommended by the datasheet to perform this)
         """
 
-        if read_register(Cycles_Reg) & 0b100000:  # check bit[5]. COULD BE WRONG IF THE ENDIAN IS WRONG. 
+        if read_register(Cycles_Reg) & 0b100000 or force:  # check bit[5]. COULD BE WRONG IF THE ENDIAN IS WRONG. 
             SAVED_RCOMP0 = read_register(RComp0_Reg)  # characterisation information for open circuit operation
             SAVED_TempCo = read_register(TempCo_Reg)  # temperature compensation information for RComp0 reg
             SAVED_FullCapRep = read_register(FullCapRep_Reg) # reports the full capacity that goes with RepCap, generally used for reporting to the GUI
@@ -415,7 +415,7 @@ class BatteryNode(Node):
         # there exists this: https://docs.ros2.org/foxy/api/rclpy/api/context.html,
         # but I don't trust the context to shutdown the node AFTER I call this and make
         # everything implode sooooo
-        self.save_params()
+        self.save_params(force=True)
 
 
 def main(args=None):

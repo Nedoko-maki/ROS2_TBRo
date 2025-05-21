@@ -6,4 +6,4 @@ src/cosmo/cosmo/camera_node.py
 launch/__pycache__/
 venv/
 hailort.log
-
+.gitignore

@@ -185,6 +185,10 @@ def set_pin(pin_number, pin_type, **kwargs):
 def get_pin(pin_number):
     return pins[pin_number]
 
+def release_pin(pin_number):
+    pins[pin_number].close()
+    del pins[pin_number]
+
 # PWMPin0 = HardwarePWM(pwm_channel=0, hz=0.1, chip=0)
 # PWMPin1 = HardwarePWM(pwm_channel=1, hz=0.2, chip=0)
 # PWMPin2 = HardwarePWM(pwm_channel=0, hz=0.3, chip=1)
@@ -300,7 +304,7 @@ def write_and_verify_register(register,
 
 
 def hex_to_dec(hex):
-    """Converts hexidecimal strings into actual base-16 numerical values.
+    """Converts hexadecimal strings into actual base-16 numerical values.
 
     :return: hexidecimal value
     :rtype: int

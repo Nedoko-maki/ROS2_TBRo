@@ -55,7 +55,7 @@ class MotorDriverNode(Node):
                         }  # As per spec, this is the GPIO pin IDs rather than the physical pin numbers. 
 
     pwm_freq = 1e4 # Not defined properly yet with calculations for the Motor Bridge IC. Recommended in the DRV8701P datasheet to use 100kHz.
-    # EDIT: Just found out lgpio doesn't like +30kHz on software PWM, so I'll run 10k for now. 
+    # EDIT: Just found out lgpio REALLY doesn't like +30kHz on software PWM, so I'll run 10k for now. 
 
     
 

@@ -53,7 +53,7 @@ class ControlNode(Node):
         self.test_timer = self.create_timer(20, callback=self.test_motors)
         self.test_rate = sleep_node.create_rate(4)
 
-        self._send_to_flask_timer = self.create_timer(1, callback=self._send_battery_data_to_flask)
+        self._send_to_flask_timer = self.create_timer(1, callback=self._send_data_to_flask)
         # self.test_motors()  ## some test code 
 
     def _send_data_to_flask(self):
@@ -73,7 +73,10 @@ class ControlNode(Node):
     def _motor_callback(self, msg):
         # receive data from motors
         self.motor_data = message_to_ordereddict(msg)
+        # renaming the key the values are bound to so that the SystemInfo message
+        # accepts them. 
         self.motor_data["motor_states"] = self.motor_data.pop("data")
+
 
     def _flask_callback(self, msg):
         pass  # receieve commands from the flask app

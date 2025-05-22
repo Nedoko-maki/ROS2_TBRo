@@ -5,7 +5,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from sensor_msgs.msg import BatteryState
-from cosmo_msgs.msg import SystemCommand
+from cosmo_msgs.msg import SystemCommand, ErrorEvent
 
 import cosmo.rpio as rpio
 from cosmo.rpio import (hex_to_dec, 
@@ -171,6 +171,8 @@ class BatteryNode(Node):
 
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
+
+        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
 
         self.state = {}
         detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 

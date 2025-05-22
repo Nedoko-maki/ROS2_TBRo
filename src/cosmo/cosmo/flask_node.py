@@ -8,7 +8,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
-from cosmo_msgs.msg import SystemInfo, SystemCommand
+from cosmo_msgs.msg import SystemInfo, SystemCommand, ErrorEvent
 import cosmo.flask_app.app as flask_app
 
 QoS = QoSProfile(
@@ -40,6 +40,8 @@ class FlaskNode(Node):
         self.control_pub = self.create_publisher(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
 
+        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+
         self.data = None
                 
         # self.command_queue = Queue() # pass this into the server so it can send back data...
@@ -58,7 +60,8 @@ class FlaskNode(Node):
         msg.command, msg.value = command, value
         self.control_pub.publish(msg)
 
-    def _get_data(self):
+    def _get_data(self):  # May run into some problems with this dict being written to as _get_data
+        # gets called, causing race conditions. Might need a lock/mutex to fix this. 
         return {
             "battery": self.battery_metrics,
             "motor": ...,

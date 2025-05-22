@@ -18,6 +18,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SystemCommand.msg"
   "msg/SystemInfo.msg"
+  "msg/ErrorEvent.msg"
   DEPENDENCIES 
   std_msgs
   sensor_msgs

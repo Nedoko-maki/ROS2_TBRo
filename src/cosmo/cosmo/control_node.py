@@ -8,7 +8,7 @@ from rosidl_runtime_py.set_message import set_message_fields
 from std_msgs.msg import Float32MultiArray, String
 from sensor_msgs.msg import Image, BatteryState
 from cv_bridge import CvBridge
-from cosmo_msgs.msg import SystemInfo, SystemCommand
+from cosmo_msgs.msg import SystemInfo, SystemCommand, ErrorEvent
 
 import threading 
 
@@ -48,12 +48,15 @@ class ControlNode(Node):
         self.battery_pub = self.create_publisher(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS, callback=self._battery_callback)
 
+        self.error_sub = self.create_subscription(msg_type=ErrorEvent, topic="/error_events", qos_profile=QoS, callback=self._error_cb)
+
         self.battery_data, self.motor_data, self.model_data = None, None, None
 
         self.test_timer = self.create_timer(20, callback=self.test_motors)
         self.test_rate = sleep_node.create_rate(4)
 
-        self._send_to_flask_timer = self.create_timer(1, callback=self._send_data_to_flask)
+        _send_system_data_period = 1
+        self._send_to_flask_timer = self.create_timer(_send_system_data_period, callback=self._send_data_to_flask)
         # self.test_motors()  ## some test code 
 
     def _send_data_to_flask(self):
@@ -97,6 +100,13 @@ class ControlNode(Node):
     def _model_callback(self, msg):
         # receive ML-processed images from the model 
         self.model_data = msg 
+
+    def _error_cb(self, msg):
+        node_name = msg.node
+        error_name = msg.error
+        tb = msg.traceback
+
+        # Do something here. 
 
     def _convert_cv2_to_imgmsg(self, img):
         return self.bridge.cv2_to_imgmsg(img, "passthrough")

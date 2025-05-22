@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
 from std_msgs.msg import Float32MultiArray
-from cosmo_msgs.msg import SystemCommand
+from cosmo_msgs.msg import SystemCommand, ErrorEvent
 
 import cosmo.rpio as rpio
 from cosmo.rpio import (
@@ -70,6 +70,10 @@ class MotorDriverNode(Node):
 
         self.control_pub = self.create_publisher(msg_type=Float32MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=SystemCommand, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
+
+        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+
+
         self.motor_set_L = DRV8701_Motor_LGPIO(12, 18, pwm_frequency=self.pwm_freq)
         self.motor_set_R = DRV8701_Motor_LGPIO(19, 13, pwm_frequency=self.pwm_freq)
 

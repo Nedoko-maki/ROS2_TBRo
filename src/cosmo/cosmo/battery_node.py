@@ -1,5 +1,4 @@
 import rclpy
-import rclpy.executors
 import rclpy.logging
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
@@ -8,6 +7,7 @@ from sensor_msgs.msg import BatteryState
 from cosmo_msgs.msg import SystemCommand
 
 import cosmo.rpio as rpio
+from cosmo.control_node import sleep_node
 from cosmo.rpio import (hex_to_dec, 
                         detect_i2c,
                         write_register, 
@@ -174,7 +174,10 @@ class BatteryNode(Node):
 
         self.state = {}
         detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 
-        # self._check_reset()
+    
+        self.wait_for_node("global_sleep_node", timeout=10)  # wait for sleep node to exist before cooking the entire process
+        self._add_sleep_node(sleep_node)
+        self._check_reset()
 
         
     def _wait(self, register, bit_mask, error_msg, timeout=2):
@@ -239,12 +242,13 @@ class BatteryNode(Node):
         :rtype: float, None
         """
 
-        level = int.from_bytes(value)
+        # level = int.from_bytes(value)  # this may not even be necessary, as it may just return an int. 
+        level = value
         match register_type:
             case "Capacity":
                 # SENSE resistor is 2mOhms, hence we have a resolution of 2.5mAh/level. Max of 163.8375 Ah
                 res = 5e-6 / self.battery_params["RSENSE"]
-                return round(res * level)
+                return res * level
             
             case "Percentage":    
                 # 256 levels, 1/256% per level.
@@ -252,12 +256,12 @@ class BatteryNode(Node):
             
             case "Voltage":
                 # 78.125uV/level, with a maximum of 5.11992V (per cell basis)
-                return round(78.125e-6 * level, 2)
+                return 78.125e-6 * level
 
             case "Current":
                 # 0.78125mA/level, minimum of -25.6A and maximum of 25.5992A
                 res = 1.5625e-6 / self.battery_params["RSENSE"]
-                return round(res * level, 1)
+                return res * level
 
             case "Temperature":
                 # (1/256)C/level, minimum of -128.0 and maximum of 127.996. 
@@ -421,26 +425,13 @@ class BatteryNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     _battery_node = BatteryNode()
-    _sleep_node = rclpy.create_node("sleep_node")
-    _battery_node._add_sleep_node(_sleep_node)
-    
-    executor = rclpy.executors.MultiThreadedExecutor()
-    executor.add_node(_battery_node)
-    executor.add_node(_sleep_node)
-
-    executor_thread = threading.Thread(target=executor.spin, daemon=True)
-    executor_thread.start()
-
-    try:  # blocking operation to make sure the script doesn't leave early and end rclpy.
-        while rclpy.ok():
-            pass
+    try:
+        rclpy.spin(_battery_node)
     except KeyboardInterrupt:
         _battery_node.get_logger().warn(f"KeyboardInterrupt triggered.")
     finally:
-        _sleep_node.destroy_node()
         _battery_node.destroy_node()
-        rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
-        executor_thread.join()
+        rclpy.try_shutdown()
 
 # TODO: Can try to port the rate object into another private node
 # hosted by BatteryNode and avoid all the multithreading?

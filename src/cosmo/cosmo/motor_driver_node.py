@@ -5,6 +5,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from std_msgs.msg import Float32MultiArray
 from cosmo_msgs.msg import SystemCommand
 
+from cosmo.control_node import sleep_node
 import cosmo.rpio as rpio
 from cosmo.rpio import (
     DRV8701_Motor_LGPIO, 

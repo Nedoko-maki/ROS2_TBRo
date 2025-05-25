@@ -1,0 +1,3 @@
+int, str
+32, Voltage, 0.0025
+64, Voltage, 0.005

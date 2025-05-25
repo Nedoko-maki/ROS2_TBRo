@@ -1,4 +1,5 @@
 import rclpy
+import rclpy.executors
 from rclpy.node import Node 
 from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPolicy
 
@@ -28,7 +29,6 @@ QoS = QoSProfile(
 )
 
 sleep_node = None
-node_create_event = threading.Event()
 
 class ControlNode(Node):
 
@@ -82,7 +82,8 @@ class ControlNode(Node):
 
 
     def _flask_callback(self, msg):
-        pass  # receieve commands from the flask app
+        command, value = msg.command, msg.value
+    
 
     def _battery_callback(self, msg):
         # self.battery_data = {  # technically I'm creating a new dict every time this runs?
@@ -143,7 +144,7 @@ def main(args=None):
     
 
     global sleep_node
-    sleep_node = rclpy.create_node("sleep_node")  # There is a possibility that this being accessed by
+    sleep_node = rclpy.create_node("global_sleep_node")  # There is a possibility that this being accessed by
     # different nodes could cause major problems. 
 
     _cosmo_node = ControlNode(sleep_node=sleep_node)

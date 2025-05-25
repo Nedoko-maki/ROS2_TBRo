@@ -76,7 +76,8 @@ class ControlNode(Node):
         self.motor_data["motor_states"] = self.motor_data.pop("data")
 
     def _flask_callback(self, msg):
-        pass  # receieve commands from the flask app
+        command, value = msg.command, msg.value
+    
 
     def _battery_callback(self, msg):
         # self.battery_data = {  # technically I'm creating a new dict every time this runs?

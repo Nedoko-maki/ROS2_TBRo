@@ -145,7 +145,8 @@ class BatteryNode(Node):
     
     # Apparently 20%-80% is good for longetivity, research needs to be done on that though. 
 
-    model_cfg = 0b1000010000000000  # refer to the ModelCFG page. Bit 10 and 15 are set (hopefully the correct endian)
+    model_cfg = 0b1000010000000000  # refer to the ModelCFG page. Bit 10 and 15 are set. 
+    # Should be the correct endian, as the right side is the LSB, and the left is the MSB. 
 
     def __init__(self, debug=False):  # initialising the ROS2 node
         super().__init__("battery_node")

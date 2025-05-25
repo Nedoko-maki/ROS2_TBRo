@@ -177,13 +177,36 @@ class DRV8701_Motor_LGPIO(Motor):
         self.backward_device.close()
 
 
-def set_pin(pin_number, pin_type, **kwargs):
+def set_pin(pin_number: int, pin_type, **kwargs):
+    """Reserves a pin for use.
+
+    :param pin_number: GPIO pin number
+    :type pin_number: int
+    :param pin_type: pin class
+    :type pin_type: gpiozero Pin type, InputPin, OutputPin, OutputPWMPin
+    :return: pin object
+    :rtype: gpiozero Pin type
+    """
+
     if pins[pin_number] is None:
         pins[pin_number] = pin_type(pin_number, **kwargs)
     return pins[pin_number]
 
 def get_pin(pin_number):
+    """Returns a previously reserved pin.
+
+    :return: pin object
+    :rtype: gpiozero Pin type
+    """
+
     return pins[pin_number]
+
+def release_pin(pin_number):
+    """Release a reserved pin to the OS.
+    """
+
+    pins[pin_number].close()
+    del pins[pin_number]
 
 # PWMPin0 = HardwarePWM(pwm_channel=0, hz=0.1, chip=0)
 # PWMPin1 = HardwarePWM(pwm_channel=1, hz=0.2, chip=0)
@@ -191,16 +214,46 @@ def get_pin(pin_number):
 # PWMPin3 = HardwarePWM(pwm_channel=1, hz=0.4, chip=1)
 
 def adc_write_register(register, word, debug=False):
+    
+    """Write to the ADC register.
+
+    :param register: register to be written to.
+    :type register: int
+    :param word: word of data to be written.
+    :type word: int
+    :param debug: enable debugging output, defaults to False.
+    :type debug: bool
+    """
+
     if debug: 
             MOTOR_LOGGER.debug( f"Writing value {bin(word)} to ADC register {hex(register)}") 
     BUS.write_word_data(ADC_I2C_ADDRESS, register, word)
 
 def adc_write_address_pointer(register, debug=False):
+
+    """Write to the ADC address register.
+
+    :param register: register pointer to change to.
+    :type register: int
+    :param debug: enable debugging output, defaults to False.
+    :type debug: bool
+    """
+
     if debug: 
             MOTOR_LOGGER.debug( f"Writing ADC address pointer {hex(register)}")
     BUS.write_byte(ADC_I2C_ADDRESS, register)
 
 def adc_read_register(debug=False):
+
+    """Read the ADC register.
+
+    :param register: register to read.
+    :type register: int
+    :return: register's stored value.
+    :rtype: int
+    :param debug: enable debugging output, defaults to False.
+    :type debug: bool
+    """
     
     msb = BUS.read_byte(ADC_I2C_ADDRESS)
     lsb = BUS.read_byte(ADC_I2C_ADDRESS)
@@ -231,8 +284,7 @@ def detect_i2c(component):
             raise OSError
 
 def read_register(register, debug=True) -> int:  # uint8 register value
-
-        """Read a register.
+        """Read a BFG register.
 
         :param register: register to read.
         :type register: int
@@ -241,6 +293,7 @@ def read_register(register, debug=True) -> int:  # uint8 register value
         :param debug: enable debugging output, defaults to True.
         :type debug: bool
         """
+
         if debug: 
             BATTERY_LOGGER.debug( f"Reading BMS register {hex(register)}")
 
@@ -249,7 +302,7 @@ def read_register(register, debug=True) -> int:  # uint8 register value
 
 
 def write_register(register, value, debug=True) -> None:  # uint8 reg, uint16 value
-    """Write to a register.
+    """Write to a BFG register.
 
     :param register: register to be written to.
     :type register: int
@@ -270,8 +323,7 @@ def write_and_verify_register(register,
                               debug=True, 
                               attempts=3, 
                               sleep_rate=None) -> bool: # uint8 reg, uint16 value
-
-    """Write to a register and verify that the value is written properly.
+    """Write to a BFG register and verify that the value is written properly.
 
     :param register: register to be written to.
     :type register: int
@@ -320,7 +372,6 @@ def write_json(json_data, file="./battery_data.json"):
             json.dump(json_data, fs)
 
 def read_json(file="./battery_data.json"):
-
     """Read the settings json file.
     
     :param file: file path, defaults to local directory "./battery_data.json".
@@ -344,6 +395,13 @@ def read_json(file="./battery_data.json"):
         BATTERY_LOGGER.warn(f"ValueError: {file} was empty, falling back to default values.")
 
 def relpath(filepath):
+    """Access filepaths relative to the current active script. 
+
+    :param filepath: file path 
+    :type filepath: str, Pathlike
+    :return: file path
+    :rtype: pathlib.Path
+    """
     # access filepaths relative to the current script. 
     # Use "./file/to/path" to access local directory files.
     return Path(os.path.dirname(__file__), filepath)

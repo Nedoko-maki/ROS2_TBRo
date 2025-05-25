@@ -6,6 +6,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
 from cosmo.model import run_model
+from cosmo_msgs.msg import ErrorEvent
 
 QoS = QoSProfile(
     history=HistoryPolicy.KEEP_LAST, # Keep only up to the last 10 samples
@@ -42,6 +43,8 @@ class ModelNode(Node):
 
         self.model_pub = self.create_publisher(msg_type=Image, topic="/model/output", qos_profile=QoS)
         self.flask_sub = self.create_subscription(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS, callback=self._model_callback)
+
+        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
 
         # import cosmo.model.test_simple as model_test
 

@@ -208,7 +208,7 @@ class MotorDriverNode(Node):
             # if this doesn't work, it might need to wait for the ALRT/RDY pin and go off that. 
         
         msg = Float32MultiArray()
-        msg.data = [_["value"] for m_name, _ in self.motor_states.items()]
+        msg.data = [float(_["value"]) for _ in self.motor_states.values()]
         self.control_pub.publish(msg)  # float32 array
         
 def main(args=None):

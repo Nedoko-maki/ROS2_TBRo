@@ -67,9 +67,6 @@ class FlaskNode(Node):
 
         self.control_pub.publish(msg)
 
-        _send_data(command="motor_left", node="motor_driver_node", value1=0.9)
-        _send_data(command="motor_right", node="motor_driver_node", value1=0.3)
-
     def _get_data(self):  # May run into some problems with this dict being written to as _get_data
         # gets called, causing race conditions. Might need a lock/mutex to fix this. 
         return self.data

@@ -90,6 +90,7 @@ class ControlNode(Node):
                 self.battery_pub.publish(msg)
             case "motor_driver_node": 
                 self.motor_pub.publish(msg)
+            case "model_node": ...
 
 
     def _battery_callback(self, msg):

@@ -173,7 +173,7 @@ class BatteryNode(Node):
         self.battery_pub = self.create_publisher(msg_type=BatteryState, topic="/battery/output", qos_profile=QoS)
         self.battery_sub = self.create_subscription(msg_type=SystemCommand, topic="/battery/input", qos_profile=QoS, callback=self._battery_callback)
 
-        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+        self.error_pub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
 
         self.state = {}
         detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 
@@ -209,6 +209,27 @@ class BatteryNode(Node):
             if timeout_count * 1e-2 > timeout: 
                 self.get_logger().error(error_msg)
                 break
+
+    def _error_event(self, err_msg, error_code, tb=None):
+        """Send error event to the control node. 
+
+        :param err_msg: error message 
+        :type err_msg: str
+        :param error_code: error code to be interpreted by the control node
+        :type error_code: str
+        :param tb: traceback, defaults to None
+        :type tb: str, optional
+        """
+        
+        msg = ErrorEvent()
+        msg.node = self.get_fully_qualified_name()
+        msg.error = err_msg
+        msg.error_code = error_code
+
+        if tb:
+            msg.traceback = tb
+    
+        self.error_pub.publish(msg)
 
     def _alert_pin_triggered(self):
         # implement some form of alarm to the SBC.  
@@ -283,12 +304,25 @@ class BatteryNode(Node):
                 
 
     def _battery_callback(self, msg):
-        command, value = msg.command, msg.value
+        """Receive a SystemCommand message from the control system. 
+
+        :param msg: command
+        :type msg: SystemCommand 
+        :return: None
+        :rtype: None
+        """
+        if not msg.node_name == "battery_node":
+            self.get_logger().warn("battery_node received a command addressed to another node.")
+            return ## ERROR, somehow control node sent cmd to wrong node.  
+
+        command, reg, value = msg.command, int(msg.value1), int(msg.value2)
 
         match command:
-            case "write_register": ...
-            case "read_register": ...
-
+            case "write_register":
+                write_register(reg, value, debug=True)
+            case "read_register": 
+                _ = read_register(reg, debug=True)
+                self.get_logger().info(f"The register {reg} had a value of {_}")
     
     def _send_data(self):
 
@@ -414,6 +448,7 @@ class BatteryNode(Node):
         
         if read_register(Status_Reg) & 0x8000:  # bit 15 is the Battery removal bit, Br.
             self.get_logger().error("Critical Error: Battery has been removed!") 
+            self._error_event(err_msg="Battery has been removed.", error_code="BAT_REMOVED")
 
         self._send_data()
 
@@ -422,6 +457,7 @@ class BatteryNode(Node):
         # there exists this: https://docs.ros2.org/foxy/api/rclpy/api/context.html,
         # but I don't trust the context to shutdown the node AFTER I call this and make
         # everything implode sooooo
+        self._error_event("BatteryNode died.", "BAT_NODE_KILL")
         self.save_params(force=True)
 
 

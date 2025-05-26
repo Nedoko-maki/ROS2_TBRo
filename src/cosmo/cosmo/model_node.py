@@ -44,7 +44,7 @@ class ModelNode(Node):
         self.model_pub = self.create_publisher(msg_type=Image, topic="/model/output", qos_profile=QoS)
         self.flask_sub = self.create_subscription(msg_type=Image, topic="/flask/output/camera_feed", qos_profile=QoS, callback=self._model_callback)
 
-        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+        self.error_pub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
 
         # import cosmo.model.test_simple as model_test
 

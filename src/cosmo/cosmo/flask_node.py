@@ -41,7 +41,7 @@ class FlaskNode(Node):
         self.control_pub = self.create_publisher(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
 
-        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+        self.error_pub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
 
         self.data = None
                 

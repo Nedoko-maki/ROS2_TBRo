@@ -129,14 +129,12 @@ class MotorDriverNode(Node):
         # any of the below, such as 'forward', and if the case has a value inside, then follow up with a semicolon and the value after.
         # e.g. 'forward:0.1' 
 
-        command = msg.command
-        value = msg.value1
+        command, value = msg.command, msg.value1
 
-        self.get_logger().debug(f"command is {msg.value1}")
+        self.get_logger().debug(f"command is {msg.command}, with value {msg.value1}")
 
         match command:    
             case "forward":
-
                 self.motor_set_L.forward(value)
                 self.motor_set_R.forward(value)
 

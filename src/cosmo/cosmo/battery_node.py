@@ -163,7 +163,7 @@ class BatteryNode(Node):
 
         battery_update_period = 0.5  # period for sending the battery metrics to control node
         save_params_period = 10  # check to save the battery metrics
-        check_reset_period = 4  # check if the IC has reset
+        check_reset_period = 10  # check if the IC has reset
 
         self._battery_check = self.create_timer(battery_update_period, self.get_battery_state, autostart=False)  # for updating the battery status  
         self._save_data_check = self.create_timer(save_params_period, self.save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
@@ -245,43 +245,44 @@ class BatteryNode(Node):
             case "Capacity":
                 # SENSE resistor is 2mOhms, hence we have a resolution of 2.5mAh/level. Max of 163.8375 Ah
                 res = 5e-6 / self.battery_params["RSENSE"]
-                return res * level
+                return float(res * level)
             
             case "Percentage":    
                 # 256 levels, 1/256% per level.
-                return round(100 * (level / 256), 1)
+                return float(100 * (level / 256))
             
             case "Voltage":
                 # 78.125uV/level, with a maximum of 5.11992V (per cell basis)
-                return 78.125e-6 * level
+                return float(78.125e-6 * level)
 
             case "Current":
                 # 0.78125mA/level, minimum of -25.6A and maximum of 25.5992A
                 res = 1.5625e-6 / self.battery_params["RSENSE"]
-                return res * level
+                return float(res * level)
 
             case "Temperature":
                 # (1/256)C/level, minimum of -128.0 and maximum of 127.996. 
-                return round((1/256) * level, 1)
+                return float((1/256) * level)
             
             case "Resistance":
                 # 1/4096 per level, minimum of 0 and maximum of 15.99976.
-                return round((1/4096) * level, 1)
+                return float((1/4096) * level)
 
             case "Time":
                 # 5.625s per level, minimum of 0 and maximum of 102.3984hrs. 
-                return (5.625 * level)
+                return float(5.625 * level)
 
             case "Special":
                 self.get_logger().warn("Should implement manually.")
                 
 
     def _battery_callback(self, msg):
-        command, value = msg.command, msg.value
+        command, reg, val = msg.command, int(msg.value1), int(msg.value2)
+
 
         match command:
-            case "write_register": ...
-            case "read_register": ...
+            case "write_register": write_register(reg, val, debug=True)
+            case "read_register": self.get_logger().info(read_register(register=reg, debug = True))
 
     
     def _send_data(self):
@@ -313,7 +314,7 @@ class BatteryNode(Node):
         # msg.power_supply_status = 0 # haven't found an easy way to check the exact state of the battery with a single register.
         # May need to calculate it manually (yuck). 
 
-        msg.battery_present = self.state["BatteryPresent"]
+        msg.present = self.state["BatteryPresent"]
 
         self.battery_pub.publish(msg) # Publish BatteryState message 
                 

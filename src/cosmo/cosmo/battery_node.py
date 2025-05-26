@@ -7,7 +7,6 @@ from sensor_msgs.msg import BatteryState
 from cosmo_msgs.msg import SystemCommand, ErrorEvent
 
 import cosmo.rpio as rpio
-from cosmo.control_node import sleep_node
 from cosmo.rpio import (hex_to_dec, 
                         detect_i2c,
                         write_register, 
@@ -164,7 +163,7 @@ class BatteryNode(Node):
 
         battery_update_period = 0.5  # period for sending the battery metrics to control node
         save_params_period = 10  # check to save the battery metrics
-        check_reset_period = 4  # check if the IC has reset
+        check_reset_period = 10  # check if the IC has reset
 
         self._battery_check = self.create_timer(battery_update_period, self.get_battery_state, autostart=False)  # for updating the battery status  
         self._save_data_check = self.create_timer(save_params_period, self.save_params, autostart=False)  # check bit 6 of the Cycles register to save charge parameters. 
@@ -177,11 +176,6 @@ class BatteryNode(Node):
 
         self.state = {}
         detect_i2c("battery")  # check that i2c address 0x6c is connected and readable. 
-    
-        self.wait_for_node("global_sleep_node", timeout=10)  # wait for sleep node to exist before cooking the entire process
-        self._add_sleep_node(sleep_node)
-        self._check_reset()
-
         
     def _wait(self, register, bit_mask, error_msg, timeout=2):
 
@@ -272,57 +266,44 @@ class BatteryNode(Node):
             case "Capacity":
                 # SENSE resistor is 2mOhms, hence we have a resolution of 2.5mAh/level. Max of 163.8375 Ah
                 res = 5e-6 / self.battery_params["RSENSE"]
-                return res * level
+                return float(res * level)
             
             case "Percentage":    
                 # 256 levels, 1/256% per level.
-                return round(100 * (level / 256), 1)
+                return float(100 * (level / 256))
             
             case "Voltage":
                 # 78.125uV/level, with a maximum of 5.11992V (per cell basis)
-                return 78.125e-6 * level
+                return float(78.125e-6 * level)
 
             case "Current":
                 # 0.78125mA/level, minimum of -25.6A and maximum of 25.5992A
                 res = 1.5625e-6 / self.battery_params["RSENSE"]
-                return res * level
+                return float(res * level)
 
             case "Temperature":
                 # (1/256)C/level, minimum of -128.0 and maximum of 127.996. 
-                return round((1/256) * level, 1)
+                return float((1/256) * level)
             
             case "Resistance":
                 # 1/4096 per level, minimum of 0 and maximum of 15.99976.
-                return round((1/4096) * level, 1)
+                return float((1/4096) * level)
 
             case "Time":
                 # 5.625s per level, minimum of 0 and maximum of 102.3984hrs. 
-                return (5.625 * level)
+                return float(5.625 * level)
 
             case "Special":
                 self.get_logger().warn("Should implement manually.")
                 
 
     def _battery_callback(self, msg):
-        """Receive a SystemCommand message from the control system. 
-
-        :param msg: command
-        :type msg: SystemCommand 
-        :return: None
-        :rtype: None
-        """
-        if not msg.node_name == "battery_node":
-            self.get_logger().warn("battery_node received a command addressed to another node.")
-            return ## ERROR, somehow control node sent cmd to wrong node.  
-
-        command, reg, value = msg.command, int(msg.value1), int(msg.value2)
+        command, value = msg.command, msg.value
 
         match command:
-            case "write_register":
-                write_register(reg, value, debug=True)
-            case "read_register": 
-                _ = read_register(reg, debug=True)
-                self.get_logger().info(f"The register {reg} had a value of {_}")
+            case "write_register": ...
+            case "read_register": ...
+
     
     def _send_data(self):
 
@@ -353,7 +334,7 @@ class BatteryNode(Node):
         # msg.power_supply_status = 0 # haven't found an easy way to check the exact state of the battery with a single register.
         # May need to calculate it manually (yuck). 
 
-        msg.battery_present = self.state["BatteryPresent"]
+        msg.present = self.state["BatteryPresent"]
 
         self.battery_pub.publish(msg) # Publish BatteryState message 
                 
@@ -463,14 +444,28 @@ class BatteryNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
+
+    sleep_node = rclpy.create_node("bfg_sleep_node")  
     _battery_node = BatteryNode()
+    _battery_node._add_sleep_node(sleep_node)
+
+    executor = rclpy.executors.MultiThreadedExecutor()
+    executor.add_node(_battery_node)
+    executor.add_node(sleep_node)
+
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
+    executor_thread.start()
+
     try:
-        rclpy.spin(_battery_node)
+        while rclpy.ok():
+            pass
     except KeyboardInterrupt:
         _battery_node.get_logger().warn(f"KeyboardInterrupt triggered.")
     finally:
+        sleep_node.destroy_node()
         _battery_node.destroy_node()
-        rclpy.try_shutdown()
+        rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
+        executor_thread.join()
 
 # TODO: Can try to port the rate object into another private node
 # hosted by BatteryNode and avoid all the multithreading?

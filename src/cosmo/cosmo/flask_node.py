@@ -8,7 +8,6 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
 
-from cosmo.control_node import sleep_node
 from cosmo_msgs.msg import SystemInfo, SystemCommand, ErrorEvent
 import cosmo.flask_app.app as flask_app
 
@@ -44,7 +43,9 @@ class FlaskNode(Node):
         self.error_pub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
 
         self.data = None
-                
+
+        self.test_timer = self.create_timer(10, callback=self._test_commands)
+                       
         # self.command_queue = Queue() # pass this into the server so it can send back data...
         # # Can we send a function/method instead to run to pass back data?
         # self.image_queue = Queue()
@@ -55,32 +56,80 @@ class FlaskNode(Node):
         # flask_app.start_server(receive_callback=_receive_command, send_callback=_get_data)
         # self.vcap = cv2.VideoCapture(url)
 
-    def _receive_command(self, command, value):
-        # receive commands from the flask app and publish to the /flask/output/commands topic
+    def _test_commands(self):
+
+        command_list= [
+            ("write_register", "battery_node", 0x02, 0x02),
+            ("read_register", "battery_node", 0x03),
+            ("forward", "motor_driver_node", 1),
+            ("forward_left", "motor_driver_node", 0.5)
+        ]
+
+        for cmd in command_list:
+            self._receive_command(*cmd)
+
+    def _receive_command(self, command, node, value1=None, value2=None):
+        """Receive commands from the flask app and publish to the /flask/output/commands topic
+
+        :param command: command
+        :type command: str
+        :param node: node name
+        :type node: str
+        :param value1: parameter 1, defaults to None
+        :type value1: float, optional
+        :param value2: parameter 2, defaults to None
+        :type value2: float, optional
+        """
+
         msg = SystemCommand()
-        msg.command, msg.value = command, value
+        msg.command = command
+        msg.node_name = node
+        
+        msg.value1 = float(value1) if value1 else .0 # HAVE TO FILL ALL VALUES OF THE MSG OR IT BREAKS. 
+        msg.value2 = float(value2) if value2 else .0 # ALSO HAS TO BE FLOAT32 VALUES. 
+
         self.control_pub.publish(msg)
 
     def _get_data(self):  # May run into some problems with this dict being written to as _get_data
         # gets called, causing race conditions. Might need a lock/mutex to fix this. 
-        return {
-            "battery": self.battery_metrics,
-            "motor": ...,
-            "temps": ...
-                }  # will provide more
+        """Returns data to the flask app.
+
+        :return: system data
+        :rtype: dict
+        """
+        return self.data
     
     def _control_callback(self, msg):
+        """Saves incoming data as a dict from the SystemCommand ROS2 message.
+
+        :param msg: ROS2 Message
+        :type msg: SystemCommand 
+        """
         # send back relevant data metrics from battery, motor, temps, etc. 
         # assign data values from the ros2 message into a dict or something to store data
         # there will be another function for the flask server to call to retrieve these values
         self.data = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
+        # self.get_logger().info(str(self.data))
 
+    def _convert_cv2_to_imgmsg(self, img):
+        """Convert a opencv2 image to a ROS2 Image message. 
 
+        :param img: cv2 image
+        :type img: numpy.ndarray, MatLike
+        :return: ROS2 Message
+        :rtype: Image
+        """
+        return self.bridge.cv2_to_imgmsg(img, "passthrough")
+    
     def _convert_imgmsg_to_cv2(self, msg):
-        return self.bridge.imgmsg_to_cv2(msg, "passthrough")
+        """Convert a ROS2 Image message to a opencv2 image. 
 
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
+        :param msg: ROS2 Message
+        :type msg: Image
+        :return: cv2 image
+        :rtype: numpy.ndarray, MatLike
+        """
+        return self.bridge.imgmsg_to_cv2(msg, "passthrough")
         
 
 

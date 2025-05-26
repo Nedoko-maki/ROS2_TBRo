@@ -115,6 +115,19 @@ class MotorDriverNode(Node):
 
     def _control_callback(self, msg):
         
+        """Receives commands from the control node and processes them. 
+        
+        If there is an associated value, it is stored in msg.value1 as a float. Options are:
+        - forward, value between 0 and 1
+        - reverse, value between 0 and 1
+        - motor_left, value between 0 and 1
+        - motor_right, value between 0 and 1
+        - coast
+        - brake
+        - sleep
+        - wake
+        """
+
         # self.get_logger().info(f"Got message {msg}, {msg.data}")
 
         # From what I can discern, I don't need to think about SH1 and SH2, controlled by the PiHat. Page 14 on the datasheet.
@@ -129,14 +142,12 @@ class MotorDriverNode(Node):
         # any of the below, such as 'forward', and if the case has a value inside, then follow up with a semicolon and the value after.
         # e.g. 'forward:0.1' 
 
-        command = msg.command
-        value = msg.value
+        command, value = msg.command, msg.value1
 
-        self.get_logger().debug(f"command is {msg.data}")
+        self.get_logger().debug(f"command is {msg.command}, with value {msg.value1}")
 
         match command:    
             case "forward":
-
                 self.motor_set_L.forward(value)
                 self.motor_set_R.forward(value)
 
@@ -162,6 +173,8 @@ class MotorDriverNode(Node):
             case "wake": self.pins["NSLEEP"].on()
 
     def _read_adc(self):
+        """Reads the ADS1015 ADC register values, stores them in a float list and publishes the ROS2 message. 
+        """
         # 00b Conversion reg 
         # 01b Config reg
         # 10b Low_thresh reg
@@ -210,7 +223,7 @@ class MotorDriverNode(Node):
             # if this doesn't work, it might need to wait for the ALRT/RDY pin and go off that. 
         
         msg = Float32MultiArray()
-        msg.data = [_["value"] for m_name, _ in self.motor_states.items()]
+        msg.data = [float(_["value"]) for _ in self.motor_states.values()]
         self.control_pub.publish(msg)  # float32 array
         
 def main(args=None):

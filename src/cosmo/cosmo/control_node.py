@@ -50,42 +50,67 @@ class ControlNode(Node):
 
         self.error_sub = self.create_subscription(msg_type=ErrorEvent, topic="/error_events", qos_profile=QoS, callback=self._error_cb)
 
-        self.battery_data, self.motor_data, self.model_data = None, None, None
+        self.battery_data, self.motor_data, self.model_data = None, dict(), None
 
         self.test_timer = self.create_timer(20, callback=self.test_motors)
         self.test_rate = sleep_node.create_rate(4)
 
         _send_system_data_period = 1
         self._send_to_flask_timer = self.create_timer(_send_system_data_period, callback=self._send_data_to_flask)
-        # self.test_motors()  ## some test code 
+       
 
     def _send_data_to_flask(self):
+        """Package up the ROS2 messages into the SystemCommand custom message and send to the 
+        flask node. 
+        """
+
         msg = SystemInfo()
 
-        for popdata in [self.battery_data, self.motor_data]:
-            if popdata:
-                set_message_fields(msg, popdata)
-            else:
-                self.get_logger().debug(f"Data is empty! Check the node for problems.")
-        
-        if self.model_data:  # Hoping I don't need to modify the original image msg.
-            msg.image = self.model_data
+        if self.battery_data: msg.battery_state = self.battery_data
+        if self.motor_data: msg.motor_states = self.motor_data
+        if self.model_data: msg.model_image = self.model_data
 
         self.flask_pub.publish(msg)
 
     def _motor_callback(self, msg):
-        # receive data from motors
-        self.motor_data = message_to_ordereddict(msg)
-        # renaming the key the values are bound to so that the SystemInfo message
-        # accepts them. 
-        self.motor_data["motor_states"] = self.motor_data.pop("data")
+        """Receive motor data in a Float32MultiArray ROS2 message.
+
+        :param msg: ROS2 Message
+        :type msg: Float32MultiArray
+        """
+
+        # # receive data from motors
+        # tmp = message_to_ordereddict(msg)
+        # # renaming the key the values are bound to so that the SystemInfo message
+        # # accepts them. 
+        # self.motor_data["motor_states"] = tmp.pop("data")
+        self.motor_data = msg
 
 
-    def _flask_callback(self, msg):
-        command, value = msg.command, msg.value
-    
+    def _flask_callback(self, msg: SystemCommand):
+        """Pipe ROS2 commands to their intended destination. 
+
+        :param msg: ROS2 Message
+        :type msg: SystemCommand
+        """
+
+        node_dest = msg.node_name
+
+        match node_dest:
+            case "battery_node" | "battery" | "bfg": 
+                self.battery_pub.publish(msg)
+            case "motor_driver_node" | "motor_driver" | "motor": 
+                self.motor_pub.publish(msg)
+            case "model_node": ...
+
 
     def _battery_callback(self, msg):
+        """Receive battery BFG data in a BatteryState ROS2 message.
+
+        :param msg: ROS2 Message
+        :type msg: BatteryState
+        """
+
         # self.battery_data = {  # technically I'm creating a new dict every time this runs?
             # "voltage": msg.voltage,  # voltage
             # "percentage": msg.percentage,  # charge percentage normalised from 0 to 1
@@ -94,25 +119,56 @@ class ControlNode(Node):
             # "capacity": msg.capacity,  # capacity in Ah. 
             # "design_capacity": msg.design_capacity  # Design capacity                 
                             #  }
-                               
-        self.battery_data = message_to_ordereddict(msg)
-        # May need to filter out empty values if it includes ALL the fields of the BatteryState msg. 
+        self.battery_data = msg
+        # self.get_logger().info(f"{message_to_ordereddict(msg)}")
 
     def _model_callback(self, msg):
+        """Receive model image in an Image ROS2 message.
+
+        :param msg: ROS2 Message
+        :type msg: Image
+        """
         # receive ML-processed images from the model 
         self.model_data = msg 
 
     def _error_cb(self, msg):
+        """Process error messages from nodes.
+
+        :param msg: ROS2 Message
+        :type msg: ErrorEvent
+        """
+
         node_name = msg.node
         error_name = msg.error
         tb = msg.traceback
 
+        match error_name:
+            case "BAT_NOT_PRESENT": ...
+            case "BAT_I2C_FAIL": ...
+            case "BAT_MODEL_CONFIG_NOT_SET": ...
+            case "BAT_NODE_KILL": ...
+            case "MOTOR_I2C_FAIL": ...
+            case "MOTOR_NODE_KILL": ...
         # Do something here. 
 
     def _convert_cv2_to_imgmsg(self, img):
+        """Convert a opencv2 image to a ROS2 Image message. 
+
+        :param img: cv2 image
+        :type img: numpy.ndarray, MatLike
+        :return: ROS2 Message
+        :rtype: Image
+        """
         return self.bridge.cv2_to_imgmsg(img, "passthrough")
     
     def _convert_imgmsg_to_cv2(self, msg):
+        """Convert a ROS2 Image message to a opencv2 image. 
+
+        :param msg: ROS2 Message
+        :type msg: Image
+        :return: cv2 image
+        :rtype: numpy.ndarray, MatLike
+        """
         return self.bridge.imgmsg_to_cv2(msg, "passthrough")
     
     def test_motors(self):
@@ -131,22 +187,19 @@ class ControlNode(Node):
         for cmd in test_commands:
             msg = SystemCommand()
             if len(cmd) == 1:
-                msg.command, msg.value = cmd[0]
+                msg.command, msg.value1 = cmd[0], .0
             else:
-                msg.command, msg.value = cmd[0], None
+                msg.command, msg.value1 = cmd
 
+            msg.value2 = .0
             self.test_rate.sleep()
             self.motor_pub.publish(msg)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    
 
-    global sleep_node
-    sleep_node = rclpy.create_node("global_sleep_node")  # There is a possibility that this being accessed by
-    # different nodes could cause major problems. 
-
+    sleep_node = rclpy.create_node("control_sleep_node")  
     _cosmo_node = ControlNode(sleep_node=sleep_node)
 
     executor = rclpy.executors.MultiThreadedExecutor()
@@ -166,6 +219,3 @@ def main(args=None):
         _cosmo_node.destroy_node()
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
         executor_thread.join()
-    
-if __name__ == "__main__":
-    main()

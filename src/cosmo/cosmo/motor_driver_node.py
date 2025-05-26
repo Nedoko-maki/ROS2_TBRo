@@ -72,7 +72,7 @@ class MotorDriverNode(Node):
         self.control_pub = self.create_publisher(msg_type=Float32MultiArray, topic="/motor_driver/output", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=SystemCommand, topic="/motor_driver/input", qos_profile=QoS, callback=self._control_callback)
 
-        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events", qos_profile=QoS)
 
 
         self.motor_set_L = DRV8701_Motor_LGPIO(12, 18, pwm_frequency=self.pwm_freq)
@@ -130,9 +130,9 @@ class MotorDriverNode(Node):
         # e.g. 'forward:0.1' 
 
         command = msg.command
-        value = msg.value
+        value = msg.value1
 
-        self.get_logger().debug(f"command is {msg.data}")
+        self.get_logger().debug(f"command is {msg.value1}")
 
         match command:    
             case "forward":

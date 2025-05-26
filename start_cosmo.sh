@@ -30,7 +30,7 @@ if [ ! -d ./src ]; then
 fi
 
 . ./venv/bin/activate
-colcon build --packages-select cosmo 	
+colcon build --packages-select cosmo cosmo_msgs
 deactivate
 
 elif [ $option = "exit" ]; then

@@ -82,8 +82,15 @@ class ControlNode(Node):
 
 
     def _flask_callback(self, msg):
-        command, value = msg.command, msg.value
-    
+
+        node_dest = msg.node_name
+
+        match node_dest:
+            case "battery_node": 
+                self.battery_pub.publish(msg)
+            case "motor_driver_node": 
+                self.motor_pub.publish(msg)
+
 
     def _battery_callback(self, msg):
         # self.battery_data = {  # technically I'm creating a new dict every time this runs?
@@ -131,9 +138,9 @@ class ControlNode(Node):
         for cmd in test_commands:
             msg = SystemCommand()
             if len(cmd) == 1:
-                msg.command, msg.value = cmd[0]
+                msg.command, msg.value1 = cmd[0]
             else:
-                msg.command, msg.value = cmd[0], None
+                msg.command, msg.value1 = cmd[0], None
 
             self.test_rate.sleep()
             self.motor_pub.publish(msg)
@@ -141,12 +148,8 @@ class ControlNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    
 
-    global sleep_node
-    sleep_node = rclpy.create_node("global_sleep_node")  # There is a possibility that this being accessed by
-    # different nodes could cause major problems. 
-
+    sleep_node = rclpy.create_node("control_sleep_node")  
     _cosmo_node = ControlNode(sleep_node=sleep_node)
 
     executor = rclpy.executors.MultiThreadedExecutor()
@@ -166,6 +169,3 @@ def main(args=None):
         _cosmo_node.destroy_node()
         rclpy.try_shutdown()  # this complains if it's called for some unknown reason. Do I require only 1 rclpy.shutdown() event?
         executor_thread.join()
-    
-if __name__ == "__main__":
-    main()

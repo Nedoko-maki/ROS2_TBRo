@@ -41,7 +41,7 @@ class FlaskNode(Node):
         self.control_pub = self.create_publisher(msg_type=SystemCommand, topic="/flask/output/commands", qos_profile=QoS)
         self.control_sub = self.create_subscription(msg_type=SystemInfo, topic="/flask/input", qos_profile=QoS, callback=self._control_callback)
 
-        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events")
+        self.error_sub = self.create_publisher(msg_type=ErrorEvent, topic="/error_events", qos_profile=QoS)
 
         self.data = None
                 
@@ -55,19 +55,24 @@ class FlaskNode(Node):
         # flask_app.start_server(receive_callback=_receive_command, send_callback=_get_data)
         # self.vcap = cv2.VideoCapture(url)
 
-    def _receive_command(self, command, value):
+    def _receive_command(self, command, node, value1=None, value2=None, value3=None):
         # receive commands from the flask app and publish to the /flask/output/commands topic
         msg = SystemCommand()
-        msg.command, msg.value = command, value
+        msg.command = command
+        msg.node_name = node
+
+        if value1: msg.value1 = value1
+        if value2: msg.value1 = value2
+        if value3: msg.value1 = value3
+
         self.control_pub.publish(msg)
+
+        _send_data(command="motor_left", node="motor_driver_node", value1=0.9)
+        _send_data(command="motor_right", node="motor_driver_node", value1=0.3)
 
     def _get_data(self):  # May run into some problems with this dict being written to as _get_data
         # gets called, causing race conditions. Might need a lock/mutex to fix this. 
-        return {
-            "battery": self.battery_metrics,
-            "motor": ...,
-            "temps": ...
-                }  # will provide more
+        return self.data
     
     def _control_callback(self, msg):
         # send back relevant data metrics from battery, motor, temps, etc. 

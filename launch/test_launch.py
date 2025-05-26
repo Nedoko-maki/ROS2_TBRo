@@ -9,7 +9,7 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package="cosmo",
-            namespace="cosmo", # read docs for why this is what it is? avoiding namespace collisions I think.
+            namespace="test", # read docs for why this is what it is? avoiding namespace collisions I think.
             executable="test_node",
             name="test_node"
         ),

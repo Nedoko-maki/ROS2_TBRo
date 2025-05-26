@@ -5,7 +5,7 @@ from rclpy.qos import QoSProfile, HistoryPolicy, DurabilityPolicy, ReliabilityPo
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
-from cosmo.model import run_model
+from cosmo.model_hailo8 import run_model
 from cosmo_msgs.msg import ErrorEvent
 
 QoS = QoSProfile(

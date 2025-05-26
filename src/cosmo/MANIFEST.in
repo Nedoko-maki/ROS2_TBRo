@@ -1,2 +1,3 @@
 graft cosmo/flask_app
+graft cosmo/model/*
 graft cosmo/model

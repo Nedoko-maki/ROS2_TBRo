@@ -115,6 +115,19 @@ class MotorDriverNode(Node):
 
     def _control_callback(self, msg):
         
+        """Receives commands from the control node and processes them. 
+        
+        If there is an associated value, it is stored in msg.value1 as a float. Options are:
+        - forward, value between 0 and 1
+        - reverse, value between 0 and 1
+        - motor_left, value between 0 and 1
+        - motor_right, value between 0 and 1
+        - coast
+        - brake
+        - sleep
+        - wake
+        """
+
         # self.get_logger().info(f"Got message {msg}, {msg.data}")
 
         # From what I can discern, I don't need to think about SH1 and SH2, controlled by the PiHat. Page 14 on the datasheet.
@@ -160,6 +173,8 @@ class MotorDriverNode(Node):
             case "wake": self.pins["NSLEEP"].on()
 
     def _read_adc(self):
+        """Reads the ADS1015 ADC register values, stores them in a float list and publishes the ROS2 message. 
+        """
         # 00b Conversion reg 
         # 01b Config reg
         # 10b Low_thresh reg

@@ -69,7 +69,18 @@ class FlaskNode(Node):
             self._receive_command(*cmd)
 
     def _receive_command(self, command, node, value1=None, value2=None):
-        # receive commands from the flask app and publish to the /flask/output/commands topic
+        """Receive commands from the flask app and publish to the /flask/output/commands topic
+
+        :param command: command
+        :type command: str
+        :param node: node name
+        :type node: str
+        :param value1: parameter 1, defaults to None
+        :type value1: float, optional
+        :param value2: parameter 2, defaults to None
+        :type value2: float, optional
+        """
+
         msg = SystemCommand()
         msg.command = command
         msg.node_name = node
@@ -81,20 +92,44 @@ class FlaskNode(Node):
 
     def _get_data(self):  # May run into some problems with this dict being written to as _get_data
         # gets called, causing race conditions. Might need a lock/mutex to fix this. 
+        """Returns data to the flask app.
+
+        :return: system data
+        :rtype: dict
+        """
         return self.data
     
     def _control_callback(self, msg):
+        """Saves incoming data as a dict from the SystemCommand ROS2 message.
+
+        :param msg: ROS2 Message
+        :type msg: SystemCommand 
+        """
         # send back relevant data metrics from battery, motor, temps, etc. 
         # assign data values from the ros2 message into a dict or something to store data
         # there will be another function for the flask server to call to retrieve these values
         self.data = message_to_ordereddict(msg) # refer to https://github.com/ros2/rosidl_runtime_py/blob/1979f566c3b446ddbc5c3fb6896e1f03ccbc6a27/rosidl_runtime_py/convert.py#L159-L176 
         # self.get_logger().info(str(self.data))
 
-    def _convert_imgmsg_to_cv2(self, msg):
-        return self.bridge.imgmsg_to_cv2(msg, "passthrough")
+    def _convert_cv2_to_imgmsg(self, img):
+        """Convert a opencv2 image to a ROS2 Image message. 
 
-    def _convert_cv2_to_imgmsg(self, msg):
-        return self.bridge.cv2_to_imgmsg(msg, "passthrough")
+        :param img: cv2 image
+        :type img: numpy.ndarray, MatLike
+        :return: ROS2 Message
+        :rtype: Image
+        """
+        return self.bridge.cv2_to_imgmsg(img, "passthrough")
+    
+    def _convert_imgmsg_to_cv2(self, msg):
+        """Convert a ROS2 Image message to a opencv2 image. 
+
+        :param msg: ROS2 Message
+        :type msg: Image
+        :return: cv2 image
+        :rtype: numpy.ndarray, MatLike
+        """
+        return self.bridge.imgmsg_to_cv2(msg, "passthrough")
         
 
 
